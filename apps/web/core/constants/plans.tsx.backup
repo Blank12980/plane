@@ -1023,35 +1023,35 @@ export const PLANS_COMPARISON_LIST: TPlansComparisonDetails[] = [
       },
     ],
   },
-   {
-     id: "storage",
-     title: "Storage",
-     cloudOnly: true,
-     features: [
-       {
-         title: "Space",
-         description: "Total storage allowed per workspace",
-         cloud: {
-           free: "Unlimited",
-           one: "Unlimited",
-           pro: "Unlimited",
-           business: "Unlimited",
-           enterprise: "Unlimited",
-         },
-       },
-       {
-         title: "Max file size",
-         description: "Limit for uploads to your workspace",
-         cloud: {
-           free: "Unlimited",
-           one: "Unlimited",
-           pro: "Unlimited",
-           business: "Unlimited",
-           enterprise: "Unlimited",
-         },
-       },
-     ],
-   },
+  {
+    id: "storage",
+    title: "Storage",
+    cloudOnly: true,
+    features: [
+      {
+        title: "Space",
+        description: "Total storage allowed per workspace",
+        cloud: {
+          free: "5GB",
+          one: false,
+          pro: "1 TB",
+          business: "5 TB",
+          enterprise: "Custom",
+        },
+      },
+      {
+        title: "Max file size",
+        description: "Limit for uploads to your workspace",
+        cloud: {
+          free: "5 MB",
+          one: false,
+          pro: "100 MB",
+          business: "200 MB",
+          enterprise: "Custom",
+        },
+      },
+    ],
+  },
   {
     id: "security",
     title: "Security",
@@ -1300,12 +1300,12 @@ export const PLANE_PLANS: PlanePlans = {
       isActive: false,
     },
   },
-   planHighlights: {
-     free: ["Unlimited users", "Pages", "Unlimited projects", "Unlimited cycles and modules"],
-     one: ["Unlimited users", "OIDC and SAML", "Active cycles", "Full time tracking"],
-     pro: ["Unlimited users", "Custom work items + Properties", "Work item templates", "Full Time Tracking"],
-     business: ["Unlimited users", "RBAC", "Project Templates", "Baselines And Deviations", "Custom Reports"],
-     enterprise: ["Unlimited users", "Private + managed deployments", "GAC", "LDAP support", "Databases + Formulas"],
-   },
+  planHighlights: {
+    free: ["Upto 12 users", "Pages", "Unlimited projects", "Unlimited cycles and modules"],
+    one: ["Upto 50 users", "OIDC and SAML", "Active cycles", "Limited time tracking"],
+    pro: ["Unlimited users", "Custom work items + Properties", "Work item templates", "Full Time Tracking"],
+    business: ["RBAC", "Project Templates", "Baselines And Deviations", "Custom Reports"],
+    enterprise: ["Private + managed deployments", "GAC", "LDAP support", "Databases + Formulas"],
+  },
   planComparison: PLANS_COMPARISON_LIST,
 };

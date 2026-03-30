@@ -9,11 +9,14 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "dev": "tsdown --watch --no-clean",
+    "dev": "tsdown --watch",
     "build": "tsdown",
     "check:lint": "oxlint --max-warnings=2 .",
     "check:types": "tsc --noEmit",

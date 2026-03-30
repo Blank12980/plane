@@ -6,22 +6,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { observer } from "mobx-react";
-import { Clock, FileStack, MoreHorizontal, MoveRight } from "lucide-react";
+import { CircleCheck, CircleX, Clock, FileStack, MoveRight } from "lucide-react";
 // plane imports
 import { EUserPermissions, EUserPermissionsLevel } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
 import { Button } from "@plane/propel/button";
-import { IconButton, getIconButtonStyling } from "@plane/propel/icon-button";
-import {
-  LinkIcon,
-  CopyIcon,
-  NewTabIcon,
-  TrashIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  CheckCircleFilledIcon,
-  CloseCircleFilledIcon,
-} from "@plane/propel/icons";
+import { LinkIcon, CopyIcon, NewTabIcon, TrashIcon, ChevronDownIcon, ChevronUpIcon } from "@plane/propel/icons";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { TNameDescriptionLoader } from "@plane/types";
 import { EInboxIssueStatus } from "@plane/types";
@@ -77,8 +67,7 @@ export const InboxIssueActionsHeader = observer(function InboxIssueActionsHeader
   const { currentTab, deleteInboxIssue, filteredInboxIssueIds } = useProjectInbox();
   const { data: currentUser } = useUser();
   const { allowPermissions } = useUserPermissions();
-  const { getPartialProjectById } = useProject();
-  const currentProjectDetails = getPartialProjectById(projectId);
+  const { currentProjectDetails } = useProject();
   const { t } = useTranslation();
 
   const router = useAppRouter();
@@ -307,70 +296,73 @@ export const InboxIssueActionsHeader = observer(function InboxIssueActionsHeader
         <div className="flex items-center gap-2">
           {!isNotificationEmbed && (
             <div className="flex items-center gap-x-2">
-              <IconButton
-                variant="secondary"
-                size="lg"
-                icon={ChevronUpIcon}
-                aria-label="Previous work item"
+              <button
+                type="button"
+                className="rounded-sm border border-subtle p-1.5"
                 onClick={() => handleInboxIssueNavigation("prev")}
-              />
-              <IconButton
-                variant="secondary"
-                size="lg"
-                icon={ChevronDownIcon}
-                aria-label="Next work item"
+              >
+                <ChevronUpIcon height={14} width={14} strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                className="rounded-sm border border-subtle p-1.5"
                 onClick={() => handleInboxIssueNavigation("next")}
-              />
+              >
+                <ChevronDownIcon height={14} width={14} strokeWidth={2} />
+              </button>
             </div>
           )}
 
           <div className="flex flex-wrap items-center gap-2">
             {canMarkAsAccepted && (
-              <Button
-                variant="secondary"
-                size="lg"
-                onClick={() =>
-                  handleActionWithPermission(
-                    isProjectAdmin,
-                    () => setAcceptIssueModal(true),
-                    t("inbox_issue.errors.accept_permission")
-                  )
-                }
-              >
-                <CheckCircleFilledIcon className="size-4 shrink-0 text-success-secondary" />
-                {t("inbox_issue.actions.accept")}
-              </Button>
+              <div className="shrink-0">
+                <Button
+                  variant="secondary"
+                  prependIcon={<CircleCheck className="h-3 w-3" />}
+                  className="border border-success-strong bg-success-primary text-on-color hover:bg-success-primary focus:bg-success-primary focus:text-success-primary"
+                  onClick={() =>
+                    handleActionWithPermission(
+                      isProjectAdmin,
+                      () => setAcceptIssueModal(true),
+                      t("inbox_issue.errors.accept_permission")
+                    )
+                  }
+                >
+                  {t("inbox_issue.actions.accept")}
+                </Button>
+              </div>
             )}
 
             {canMarkAsDeclined && (
-              <Button
-                variant="secondary"
-                size="lg"
-                onClick={() =>
-                  handleActionWithPermission(
-                    isProjectAdmin,
-                    () => setDeclineIssueModal(true),
-                    t("inbox_issue.errors.decline_permission")
-                  )
-                }
-              >
-                <CloseCircleFilledIcon className="size-4 shrink-0 text-danger-secondary" />
-                {t("inbox_issue.actions.decline")}
-              </Button>
+              <div className="shrink-0">
+                <Button
+                  variant="secondary"
+                  prependIcon={<CircleX className="h-3 w-3" />}
+                  className="border border-danger-strong bg-danger-primary text-on-color hover:bg-danger-primary-hover focus:bg-danger-primary focus:text-danger-primary"
+                  onClick={() =>
+                    handleActionWithPermission(
+                      isProjectAdmin,
+                      () => setDeclineIssueModal(true),
+                      t("inbox_issue.errors.decline_permission")
+                    )
+                  }
+                >
+                  {t("inbox_issue.actions.decline")}
+                </Button>
+              </div>
             )}
 
             {isAcceptedOrDeclined ? (
               <div className="flex items-center gap-2">
                 <Button
                   variant="secondary"
-                  size="lg"
                   prependIcon={<LinkIcon className="h-2.5 w-2.5" />}
                   onClick={() => handleCopyIssueLink(workItemLink)}
                 >
                   {t("inbox_issue.actions.copy")}
                 </Button>
                 <ControlLink href={workItemLink} onClick={() => router.push(workItemLink)} target="_self">
-                  <Button variant="secondary" size="lg" prependIcon={<NewTabIcon className="h-2.5 w-2.5" />}>
+                  <Button variant="secondary" prependIcon={<NewTabIcon className="h-2.5 w-2.5" />}>
                     {t("inbox_issue.actions.open")}
                   </Button>
                 </ControlLink>
@@ -378,11 +370,7 @@ export const InboxIssueActionsHeader = observer(function InboxIssueActionsHeader
             ) : (
               <>
                 {isAllowed && (
-                  <CustomMenu
-                    customButton={<MoreHorizontal className="size-4" />}
-                    customButtonClassName={getIconButtonStyling("secondary", "lg")}
-                    placement="bottom-start"
-                  >
+                  <CustomMenu verticalEllipsis placement="bottom-start">
                     {canMarkAsAccepted && (
                       <CustomMenu.MenuItem
                         onClick={() =>

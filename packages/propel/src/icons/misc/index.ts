@@ -4,6 +4,4 @@
  * See the LICENSE file for details.
  */
 
-export * from "./check-circle-filled-icon";
-export * from "./close-circle-filled-icon";
 export * from "./info-icon";

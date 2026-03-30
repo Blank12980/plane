@@ -32,7 +32,12 @@ RUN apk add --no-cache --virtual .build-deps \
     "libc-dev" \
     "linux-headers" \
     && \
-    pip install -r requirements.txt --compile --no-cache-dir \
+    pip install -r requirements.txt \
+    --trusted-host pypi.org \
+    --trusted-host pypi.python.org \
+    --trusted-host files.pythonhosted.org \
+    --compile --no-cache-dir --default-timeout=100 --retries 5 \
+
     && \
     apk del .build-deps \
     && \

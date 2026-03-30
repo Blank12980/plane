@@ -139,7 +139,6 @@ export const SubIssuesListItemProperties = observer(function SubIssuesListItemPr
               from: getDate(issue.start_date) || undefined,
               to: getDate(issue.target_date) || undefined,
             }}
-            placement="top-end"
             onSelect={(range) => {
               handleStartDate(range?.from ?? null);
               handleTargetDate(range?.to ?? null);
@@ -155,7 +154,6 @@ export const SubIssuesListItemProperties = observer(function SubIssuesListItemPr
             showTooltip
             customTooltipHeading="Date Range"
             renderPlaceholder={false}
-            renderInPortal
           />
         </div>
       </WithDisplayPropertiesHOC>

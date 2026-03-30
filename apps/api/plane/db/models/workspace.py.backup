@@ -326,7 +326,7 @@ class WorkspaceUserProperties(BaseModel):
     display_filters = models.JSONField(default=get_default_display_filters)
     display_properties = models.JSONField(default=get_default_display_properties)
     rich_filters = models.JSONField(default=dict)
-    navigation_project_limit = models.IntegerField(default=0, help_text="0 means unlimited")
+    navigation_project_limit = models.IntegerField(default=10)
     navigation_control_preference = models.CharField(
         max_length=25,
         choices=NavigationControlPreference.choices,
