@@ -3,7 +3,6 @@
 # See the LICENSE file for details.
 
 # Third party imports
-import os
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework import status
 from rest_framework.response import Response
@@ -16,7 +15,7 @@ from plane.authentication.adapter.error import (
 
 
 class AuthenticationThrottle(AnonRateThrottle):
-    rate = "10000/minute"
+    rate = "30/minute"
     scope = "authentication"
 
     def throttle_failure_view(self, request, *args, **kwargs):
@@ -32,10 +31,10 @@ class AuthenticationThrottle(AnonRateThrottle):
 class EmailVerificationThrottle(UserRateThrottle):
     """
     Throttle for email verification code generation.
-    Limits to 10000 requests per hour per user to prevent abuse.
+    Limits to 3 requests per hour per user to prevent abuse.
     """
 
-    rate = "10000/hour"
+    rate = "3/hour"
     scope = "email_verification"
 
     def throttle_failure_view(self, request, *args, **kwargs):

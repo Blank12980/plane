@@ -118,19 +118,19 @@ export const useProjectNavigationPreferences = () => {
 
   // Computed preferences with fallback logic: API → defaults
   const preferences: TProjectNavigationPreferences = useMemo(() => {
-     // 1. Try API data first
-     if (
-       storePreferences &&
-       (storePreferences.navigation_control_preference || storePreferences.navigation_project_limit !== undefined)
-     ) {
-       const limit = storePreferences.navigation_project_limit === 0 ? Number.MAX_SAFE_INTEGER : (storePreferences.navigation_project_limit ?? DEFAULT_PROJECT_PREFERENCES.limitedProjectsCount);
+    // 1. Try API data first
+    if (
+      storePreferences &&
+      (storePreferences.navigation_control_preference || storePreferences.navigation_project_limit !== undefined)
+    ) {
+      const limit = storePreferences.navigation_project_limit ?? DEFAULT_PROJECT_PREFERENCES.limitedProjectsCount;
 
-       return {
-         navigationMode: storePreferences.navigation_control_preference || DEFAULT_PROJECT_PREFERENCES.navigationMode,
-         limitedProjectsCount: limit > 0 ? limit : DEFAULT_PROJECT_PREFERENCES.limitedProjectsCount,
-         showLimitedProjects: limit > 0, // Derived: 0 = false, >0 = true
-       };
-     }
+      return {
+        navigationMode: storePreferences.navigation_control_preference || DEFAULT_PROJECT_PREFERENCES.navigationMode,
+        limitedProjectsCount: limit > 0 ? limit : DEFAULT_PROJECT_PREFERENCES.limitedProjectsCount,
+        showLimitedProjects: limit > 0, // Derived: 0 = false, >0 = true
+      };
+    }
 
     // 2. Fall back to defaults
     return DEFAULT_PROJECT_PREFERENCES;
@@ -148,20 +148,20 @@ export const useProjectNavigationPreferences = () => {
     [workspaceSlug, updateProjectNavigationPreferences]
   );
 
-   // Update show limited projects
-   const updateShowLimitedProjects = useCallback(
-     async (show: boolean) => {
-       if (!workspaceSlug) return;
+  // Update show limited projects
+  const updateShowLimitedProjects = useCallback(
+    async (show: boolean) => {
+      if (!workspaceSlug) return;
 
-       // When toggling off, set to 0 (unlimited); when toggling on, use current count or default
-       const newLimit = show ? preferences.limitedProjectsCount || DEFAULT_PROJECT_PREFERENCES.limitedProjectsCount : 0;
+      // When toggling off, set to 0; when toggling on, use current count or default
+      const newLimit = show ? preferences.limitedProjectsCount || DEFAULT_PROJECT_PREFERENCES.limitedProjectsCount : 0;
 
-       await updateProjectNavigationPreferences(workspaceSlug.toString(), {
-         navigation_project_limit: newLimit,
-       });
-     },
-     [workspaceSlug, updateProjectNavigationPreferences, preferences.limitedProjectsCount]
-   );
+      await updateProjectNavigationPreferences(workspaceSlug.toString(), {
+        navigation_project_limit: newLimit,
+      });
+    },
+    [workspaceSlug, updateProjectNavigationPreferences, preferences.limitedProjectsCount]
+  );
 
   // Update limited projects count
   const updateLimitedProjectsCount = useCallback(
