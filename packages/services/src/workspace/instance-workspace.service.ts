@@ -33,10 +33,11 @@ export class InstanceWorkspaceService extends APIService {
    * @returns {Promise<TWorkspacePaginationInfo>} Promise resolving to a paginated list of workspaces
    * @throws {Error} If the API request fails
    */
-  async list(nextPageCursor?: string): Promise<TWorkspacePaginationInfo> {
+  async list(nextPageCursor?: string, perPage = 10): Promise<TWorkspacePaginationInfo> {
     return this.get(`/api/instances/workspaces/`, {
       params: {
         cursor: nextPageCursor,
+        per_page: perPage,
       },
     })
       .then((response) => response?.data)

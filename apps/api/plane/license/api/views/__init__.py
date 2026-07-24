@@ -34,4 +34,4 @@ from .mailbox import (
     MailAliasEndpoint,
     MailConfigEndpoint,
 )
-from .user import InstanceUserEndpoint
+from .user import InstanceUserEndpoint, InstanceUserPasswordEndpoint

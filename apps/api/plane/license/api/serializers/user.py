@@ -18,6 +18,7 @@ class UserLiteSerializer(BaseSerializer):
 class InstanceUserSerializer(BaseSerializer):
     workspace_count = serializers.IntegerField(read_only=True)
     instance_admin_role = serializers.IntegerField(read_only=True, allow_null=True)
+    instance_admin_id = serializers.UUIDField(read_only=True, allow_null=True)
 
     class Meta:
         model = User
@@ -29,11 +30,15 @@ class InstanceUserSerializer(BaseSerializer):
             "last_name",
             "avatar_url",
             "is_active",
+            "is_banned",
+            "banned_at",
+            "banned_reason",
             "is_email_verified",
             "date_joined",
             "last_active",
             "last_login_time",
             "workspace_count",
+            "instance_admin_id",
             "instance_admin_role",
         ]
         read_only_fields = fields

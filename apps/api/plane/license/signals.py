@@ -20,7 +20,7 @@ def sync_instance_admin_access(sender, instance, created, **kwargs):
         return
     if instance.deleted_at is not None:
         revoke_instance_admin_access(instance.user)
-    elif created and instance.role >= INSTANCE_ADMIN_ROLE:
+    elif instance.role >= INSTANCE_ADMIN_ROLE:
         grant_instance_admin_access(instance.user)
 
 

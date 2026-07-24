@@ -17,6 +17,7 @@ from plane.license.api.views import (
     InstanceAdminSignOutEndpoint,
     InstanceAdminUserSessionEndpoint,
     InstanceUserEndpoint,
+    InstanceUserPasswordEndpoint,
     InstanceWorkSpaceAvailabilityCheckEndpoint,
     InstanceWorkSpaceEndpoint,
     InstanceWorkspaceMemberEndpoint,
@@ -89,6 +90,11 @@ urlpatterns = [
     ),
     path("users/", InstanceUserEndpoint.as_view(), name="instance-users"),
     path("users/<uuid:pk>/", InstanceUserEndpoint.as_view(), name="instance-user-detail"),
+    path(
+        "users/<uuid:pk>/password/",
+        InstanceUserPasswordEndpoint.as_view(),
+        name="instance-user-password",
+    ),
     # Mail stack administration (god-mode -> Mail)
     path("mail/config/", MailConfigEndpoint.as_view(), name="instance-mail-config"),
     path("mailboxes/", MailboxEndpoint.as_view(), name="instance-mailboxes"),

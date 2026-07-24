@@ -43,7 +43,7 @@ from plane.utils.path_validator import get_safe_redirect_url
 
 class InstanceAdminEndpoint(BaseAPIView):
     def get_permissions(self):
-        if self.request.method in ["POST", "DELETE"]:
+        if self.request.method in ["POST", "PATCH", "DELETE"]:
             return [InstanceSuperAdminPermission()]
         return [InstanceAdminPermission()]
 
@@ -51,9 +51,15 @@ class InstanceAdminEndpoint(BaseAPIView):
     # Create an instance admin
     def post(self, request):
         email = request.data.get("email", "")
+        try:
+            role = int(request.data.get("role", INSTANCE_ADMIN_ROLE))
+        except (TypeError, ValueError):
+            return Response({"error": "Invalid instance admin role"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not email:
+        if not isinstance(email, str) or not email.strip():
             return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if role not in [INSTANCE_ADMIN_ROLE, INSTANCE_SUPER_ADMIN_ROLE]:
+            return Response({"error": "Invalid instance admin role"}, status=status.HTTP_400_BAD_REQUEST)
 
         email = email.strip().lower()
         try:
@@ -68,19 +74,23 @@ class InstanceAdminEndpoint(BaseAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        user = User.objects.filter(email=email).first()
+        user = User.objects.filter(email=email, is_active=True, is_banned=False).first()
         if user is None:
             return Response(
-                {"error": "The user must register before they can be made an admin"},
+                {"error": "An active registered user is required"},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         if InstanceAdmin.objects.filter(instance=instance, user=user).exists():
             return Response({"error": "This user is already an instance admin"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # The public endpoint intentionally never accepts a role. Only the
-        # bootstrap account can be a super admin; delegated accounts are admins.
-        instance_admin = InstanceAdmin.objects.create(instance=instance, user=user, role=INSTANCE_ADMIN_ROLE)
+        instance_admin = InstanceAdmin.all_objects.filter(instance=instance, user=user).first()
+        if instance_admin is None:
+            instance_admin = InstanceAdmin.objects.create(instance=instance, user=user, role=role)
+        else:
+            instance_admin.deleted_at = None
+            instance_admin.role = role
+            instance_admin.save(update_fields=["deleted_at", "role", "updated_at"])
         serializer = InstanceAdminSerializer(instance_admin)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -97,15 +107,63 @@ class InstanceAdminEndpoint(BaseAPIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @invalidate_cache(path="/api/instances/", user=False)
+    def patch(self, request, pk):
+        instance = Instance.objects.first()
+        instance_admin = InstanceAdmin.objects.filter(instance=instance, pk=pk).first()
+        if instance_admin is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            role = int(request.data.get("role"))
+        except (TypeError, ValueError):
+            return Response({"error": "Invalid instance admin role"}, status=status.HTTP_400_BAD_REQUEST)
+        if role not in [INSTANCE_ADMIN_ROLE, INSTANCE_SUPER_ADMIN_ROLE]:
+            return Response({"error": "Invalid instance admin role"}, status=status.HTTP_400_BAD_REQUEST)
+        if instance_admin.user_id == request.user.id and role != instance_admin.role:
+            return Response(
+                {"error": "You cannot change your own instance role"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if (
+            instance_admin.role >= INSTANCE_SUPER_ADMIN_ROLE
+            and role < INSTANCE_SUPER_ADMIN_ROLE
+            and InstanceAdmin.objects.filter(
+                instance=instance,
+                role__gte=INSTANCE_SUPER_ADMIN_ROLE,
+            ).count()
+            <= 1
+        ):
+            return Response(
+                {"error": "The last super admin cannot be demoted"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        instance_admin.role = role
+        instance_admin.save(update_fields=["role", "updated_at"])
+        return Response(InstanceAdminSerializer(instance_admin).data, status=status.HTTP_200_OK)
+
+    @invalidate_cache(path="/api/instances/", user=False)
     def delete(self, request, pk):
         instance = Instance.objects.first()
         instance_admin = InstanceAdmin.objects.filter(instance=instance, pk=pk).first()
         if instance_admin is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        if instance_admin.role >= INSTANCE_SUPER_ADMIN_ROLE:
+        if instance_admin.user_id == request.user.id:
             return Response(
-                {"error": "Super admins cannot be removed through this endpoint"},
-                status=status.HTTP_403_FORBIDDEN,
+                {"error": "You cannot remove your own instance role"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if (
+            instance_admin.role >= INSTANCE_SUPER_ADMIN_ROLE
+            and InstanceAdmin.objects.filter(
+                instance=instance,
+                role__gte=INSTANCE_SUPER_ADMIN_ROLE,
+            ).count()
+            <= 1
+        ):
+            return Response(
+                {"error": "The last super admin cannot be removed"},
+                status=status.HTTP_409_CONFLICT,
             )
         instance_admin.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -39,7 +39,7 @@ export const InstanceAdmins = observer(function InstanceAdmins(props: Props) {
 
     setIsAdding(true);
     try {
-      await instanceService.createAdmin(normalizedEmail);
+      await instanceService.createAdmin(normalizedEmail, 15);
       await fetchInstanceAdmins();
       setEmail("");
       setToast({ type: TOAST_TYPE.SUCCESS, title: "Готово", message: "Администратор получил доступ к God Mode" });

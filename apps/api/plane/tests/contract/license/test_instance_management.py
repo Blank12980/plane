@@ -23,7 +23,12 @@ def managed_instance(db):
 
 
 def create_user(email):
-    return User.objects.create(email=email, first_name=email.split("@")[0], last_name="User")
+    return User.objects.create(
+        email=email,
+        username=uuid4().hex,
+        first_name=email.split("@")[0],
+        last_name="User",
+    )
 
 
 @pytest.mark.contract
@@ -125,9 +130,9 @@ class TestInstanceManagement:
             {"email": user.email, "role": 15},
             format="json",
         )
-        deactivate_response = api_client.patch(
+        ban_response = api_client.patch(
             f"/api/instances/users/{user.id}/",
-            {"is_active": False},
+            {"is_banned": True, "banned_reason": "Policy violation"},
             format="json",
         )
 
@@ -140,9 +145,89 @@ class TestInstanceManagement:
             is_active=True,
             is_instance_admin_access=False,
         ).exists()
-        assert deactivate_response.status_code == status.HTTP_200_OK
+        assert ban_response.status_code == status.HTTP_200_OK
         user.refresh_from_db()
         assert user.is_active is False
+        assert user.is_banned is True
+        assert user.banned_reason == "Policy violation"
+
+        unban_response = api_client.patch(
+            f"/api/instances/users/{user.id}/",
+            {"is_banned": False},
+            format="json",
+        )
+        password_response = api_client.post(
+            f"/api/instances/users/{user.id}/password/",
+            {"password": "Riv3r!Cobalt-2026"},
+            format="json",
+        )
+
+        assert unban_response.status_code == status.HTTP_200_OK
+        assert password_response.status_code == status.HTTP_204_NO_CONTENT
+        user.refresh_from_db()
+        assert user.is_active is True
+        assert user.is_banned is False
+        assert user.check_password("Riv3r!Cobalt-2026")
+
+    @pytest.mark.django_db
+    def test_admin_can_edit_a_regular_user_account(self, api_client, managed_instance):
+        admin = create_user("admin@gizmo.so")
+        user = create_user("member@gizmo.so")
+        InstanceAdmin.objects.create(instance=managed_instance, user=admin, role=15)
+        api_client.force_authenticate(user=admin)
+
+        response = api_client.patch(
+            f"/api/instances/users/{user.id}/",
+            {
+                "email": "renamed@gizmo.so",
+                "display_name": "Renamed member",
+                "first_name": "Renamed",
+                "last_name": "Member",
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        user.refresh_from_db()
+        assert user.email == "renamed@gizmo.so"
+        assert user.display_name == "Renamed member"
+
+    @pytest.mark.django_db
+    def test_admin_cannot_change_super_admin_password_or_delete_users(self, api_client, managed_instance):
+        super_admin = create_user("root@gizmo.so")
+        admin = create_user("admin@gizmo.so")
+        user = create_user("member@gizmo.so")
+        InstanceAdmin.objects.create(instance=managed_instance, user=super_admin, role=20)
+        InstanceAdmin.objects.create(instance=managed_instance, user=admin, role=15)
+        api_client.force_authenticate(user=admin)
+
+        password_response = api_client.post(
+            f"/api/instances/users/{super_admin.id}/password/",
+            {"password": "Riv3r!Cobalt-2026"},
+            format="json",
+        )
+        delete_response = api_client.delete(f"/api/instances/users/{user.id}/")
+
+        assert password_response.status_code == status.HTTP_403_FORBIDDEN
+        assert delete_response.status_code == status.HTTP_403_FORBIDDEN
+        assert User.objects.filter(pk=user.id).exists()
+
+    @pytest.mark.django_db
+    def test_super_admin_can_delete_regular_user_but_not_workspace_owner(self, api_client, managed_instance):
+        super_admin = create_user("root@gizmo.so")
+        user = create_user("member@gizmo.so")
+        owner = create_user("owner@gizmo.so")
+        workspace = Workspace.objects.create(name="Owned", slug="owned", owner=owner)
+        InstanceAdmin.objects.create(instance=managed_instance, user=super_admin, role=20)
+        api_client.force_authenticate(user=super_admin)
+
+        owner_response = api_client.delete(f"/api/instances/users/{owner.id}/")
+        user_response = api_client.delete(f"/api/instances/users/{user.id}/")
+
+        assert owner_response.status_code == status.HTTP_409_CONFLICT
+        assert user_response.status_code == status.HTTP_204_NO_CONTENT
+        assert Workspace.objects.filter(pk=workspace.id).exists()
+        assert not User.objects.filter(pk=user.id).exists()
 
     @pytest.mark.django_db
     def test_regular_user_cannot_use_instance_management_api(self, api_client, managed_instance):

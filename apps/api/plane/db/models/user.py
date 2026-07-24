@@ -99,6 +99,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_email_verified = models.BooleanField(default=False)
     is_password_autoset = models.BooleanField(default=False)
     is_password_reset_required = models.BooleanField(default=False)
+    is_banned = models.BooleanField(default=False)
+    banned_at = models.DateTimeField(null=True, blank=True)
+    banned_reason = models.TextField(blank=True, default="")
     # random token generated
     token = models.CharField(max_length=64, blank=True)
 

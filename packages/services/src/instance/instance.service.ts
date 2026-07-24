@@ -14,6 +14,8 @@ import type {
   IInstanceInfo,
   IInstanceUser,
   TInstanceUserPaginationInfo,
+  TInstanceAdminRole,
+  TInstanceUserUpdate,
   TPage,
 } from "@plane/types";
 // api service
@@ -78,8 +80,17 @@ export class InstanceService extends APIService {
    * Gives a registered user God Mode access as an instance admin.
    * Only instance super admins may call this endpoint.
    */
-  async createAdmin(email: string): Promise<IInstanceAdmin> {
-    return this.post("/api/instances/admins/", { email })
+  async createAdmin(email: string, role: TInstanceAdminRole = 15): Promise<IInstanceAdmin> {
+    return this.post("/api/instances/admins/", { email, role })
+      .then((response) => response.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
+  }
+
+  /** Changes an instance administrator's global role. Only super admins may call this endpoint. */
+  async updateAdminRole(adminId: string, role: TInstanceAdminRole): Promise<IInstanceAdmin> {
+    return this.patch(`/api/instances/admins/${adminId}/`, { role })
       .then((response) => response.data)
       .catch((error) => {
         throw error?.response?.data;
@@ -105,9 +116,25 @@ export class InstanceService extends APIService {
       });
   }
 
-  async updateUser(userId: string, data: Pick<IInstanceUser, "is_active">): Promise<IInstanceUser> {
+  async updateUser(userId: string, data: TInstanceUserUpdate): Promise<IInstanceUser> {
     return this.patch(`/api/instances/users/${userId}/`, data)
       .then((response) => response.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
+  }
+
+  async changeUserPassword(userId: string, password: string): Promise<void> {
+    return this.post(`/api/instances/users/${userId}/password/`, { password })
+      .then(() => undefined)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    return this.delete(`/api/instances/users/${userId}/`)
+      .then(() => undefined)
       .catch((error) => {
         throw error?.response?.data;
       });

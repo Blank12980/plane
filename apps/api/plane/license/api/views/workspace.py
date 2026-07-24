@@ -81,7 +81,7 @@ class InstanceWorkSpaceEndpoint(BaseAPIView):
             request=request,
             queryset=workspaces,
             on_results=lambda results: WorkspaceSerializer(results, many=True).data,
-            max_per_page=10,
+            max_per_page=1000,
             default_per_page=10,
         )
 

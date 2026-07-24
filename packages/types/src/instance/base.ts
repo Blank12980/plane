@@ -94,13 +94,21 @@ export interface IInstanceUser {
   last_name: string;
   avatar_url: string | null;
   is_active: boolean;
+  is_banned: boolean;
+  banned_at: string | null;
+  banned_reason: string;
   is_email_verified: boolean;
   date_joined: string;
   last_active: string | null;
   last_login_time: string | null;
   workspace_count: number;
+  instance_admin_id: string | null;
   instance_admin_role: TInstanceAdminRole | null;
 }
+
+export type TInstanceUserUpdate = Partial<
+  Pick<IInstanceUser, "email" | "display_name" | "first_name" | "last_name" | "is_banned" | "banned_reason">
+>;
 
 export type TInstanceUserPaginationInfo = TPaginationInfo & {
   results: IInstanceUser[];
