@@ -1,0 +1,26 @@
+# ---------------------------------------------------------------------------
+# Temporary HTTP-only config used during the first certbot run.
+#
+# The real per-site configs reference /etc/letsencrypt/live/<domain>/...; nginx
+# refuses to start if those files do not exist yet, so we cannot ask certbot to
+# validate through a config that already needs the certificate it is about to
+# issue. setup-nginx.sh installs this file first, obtains the certificates,
+# then swaps in the real configs and removes this one.
+#
+# Template variables: ${ALL_DOMAINS}
+# ---------------------------------------------------------------------------
+
+server {
+    listen      80;
+    listen [::]:80;
+    server_name ${ALL_DOMAINS};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root         /var/www/certbot;
+        default_type "text/plain";
+    }
+
+    location / {
+        return 503;
+    }
+}

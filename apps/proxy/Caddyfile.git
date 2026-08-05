@@ -1,7 +1,11 @@
 # --- Forgejo git hosting --------------------------------------------------
 # Reached via the shared plane_default Docker network. SSH for git uses a
 # separate host port (2222) and bypasses Caddy entirely.
-git.{$GIT_DOMAIN} {
+#
+# The site is declared with an explicit http:// scheme: the host nginx
+# front-end (deployments/nginx/) terminates TLS for git.<domain> and forwards
+# here over plain HTTP, so Caddy must not serve this name on :443 or run ACME.
+http://git.{$GIT_DOMAIN} {
     request_body {
         max_size {$FILE_SIZE_LIMIT}
     }

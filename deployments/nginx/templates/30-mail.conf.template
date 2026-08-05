@@ -1,0 +1,45 @@
+# ---------------------------------------------------------------------------
+# mail.${MAIL_DOMAIN} — certificate holder only.
+#
+# There is no web service on this name. The block exists so certbot can renew
+# the mail.${MAIL_DOMAIN} certificate over HTTP-01; Postfix and Dovecot read the
+# issued files from /etc/letsencrypt (mounted read-only into their containers,
+# see mail-stack/docker-compose.yml) and are reloaded by the certbot deploy
+# hook installed at /etc/letsencrypt/renewal-hooks/deploy/reload-plane.sh.
+#
+# Rendered by deployments/nginx/setup-nginx.sh into
+# /etc/nginx/conf.d/30-mail.conf, only when MAIL_DOMAIN is set in the root .env.
+#
+# Template variables: ${MAIL_DOMAIN}
+# ---------------------------------------------------------------------------
+
+server {
+    listen      80;
+    listen [::]:80;
+    server_name mail.${MAIL_DOMAIN};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root         /var/www/certbot;
+        default_type "text/plain";
+    }
+
+    location / {
+        return 404;
+    }
+}
+
+server {
+    listen      443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name mail.${MAIL_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/mail.${MAIL_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mail.${MAIL_DOMAIN}/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/mail.${MAIL_DOMAIN}/chain.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    access_log off;
+
+    return 404;
+}

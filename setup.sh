@@ -182,9 +182,9 @@ function initialize_local_env_files() {
 # Resolve the effective mail domain / local-mode flags. When MAIL_DOMAIN is
 # unset in the root .env we run in local mode: domain "mail.local", self-signed
 # TLS. IMPORTANT: we deliberately do NOT write MAIL_DOMAIN into the root .env
-# in local mode — the Caddy proxy enables its mail site (and would attempt a
-# doomed Let's Encrypt cert for mail.mail.local) whenever MAIL_DOMAIN is set
-# there. Echoes "<domain>|<true|false>" for callers.
+# in local mode — deployments/nginx/setup-nginx.sh reads it from there and
+# would ask certbot for a doomed Let's Encrypt cert for mail.mail.local.
+# Echoes "<domain>|<true|false>" for callers.
 function resolve_mail_domain() {
     local mail_domain
     mail_domain=$(get_env_value "MAIL_DOMAIN" "$ROOT_ENV_PATH")
@@ -251,8 +251,8 @@ function initialize_mail_env_files() {
 
     # Resolve the effective mail domain (defaulting to mail.local for local mode)
     # and write it into the mail-stack .env so the mail compose project uses it.
-    # The root .env is intentionally left untouched so the Caddy proxy does not
-    # try to issue a Let's Encrypt cert for a non-public local domain.
+    # The root .env is intentionally left untouched so certbot is not asked for
+    # a Let's Encrypt cert for a non-public local domain.
     local resolved mail_domain mail_local
     resolved=$(resolve_mail_domain)
     mail_domain="${resolved%%|*}"
@@ -445,8 +445,25 @@ function start_services() {
 
     echo "   Gizmo Server started successfully"
     echo ""
-    echo "   Web:   http://localhost"
-    echo "   API:   http://localhost:8000"
+
+    # The stack itself only listens on 127.0.0.1:${LISTEN_HTTP_PORT}. Reaching
+    # it from outside is the host nginx front-end's job, which is set up once,
+    # separately, by deployments/nginx/setup-nginx.sh.
+    local app_host listen_port
+    app_host=$(get_env_value "APP_HOST" "$ROOT_ENV_PATH")
+    listen_port=$(get_env_value "LISTEN_HTTP_PORT" "$ROOT_ENV_PATH")
+
+    echo "   Web:   ${app_host:-http://localhost}"
+    echo "   API:   ${app_host:-http://localhost}/api"
+    echo "   Stack listens on 127.0.0.1:${listen_port:-8081} (plain HTTP, behind nginx)"
+
+    if [[ ! -f /etc/nginx/conf.d/10-plane.conf ]]; then
+        echo ""
+        echo "   NOTE: the nginx front-end does not look configured on this host."
+        echo "         It is a separate, one-time step:"
+        echo "           sudo ./deployments/nginx/setup-nginx.sh"
+        echo "         Until then the stack is only reachable on 127.0.0.1:${listen_port:-8081}."
+    fi
     echo ""
 }
 

@@ -22,6 +22,12 @@ services:
       - ./postfix/pgsql-virtual-mailbox-maps.cf.tmpl:/etc/postfix/pgsql-virtual-mailbox-maps.cf.tmpl:ro
       - ./postfix/pgsql-virtual-alias-maps.cf.tmpl:/etc/postfix/pgsql-virtual-alias-maps.cf.tmpl:ro
       - ./data/postfix:/var/lib/postfix
+      # certbot on the host owns the mail.<domain> certificate; the whole tree
+      # is mounted because live/ holds symlinks into archive/. The legacy
+      # Caddy-issued cert stays mounted so an in-place upgrade keeps TLS up
+      # until certbot has issued its own — both mounts are probed by
+      # postfix/entrypoint.sh, certbot first.
+      - ${LETSENCRYPT_DIR:-/etc/letsencrypt}:/etc/letsencrypt:ro
       - caddy-data:/etc/letsencrypt-caddy:ro
       - dovecot-auth:/var/spool/postfix/private
     depends_on:
@@ -52,6 +58,8 @@ services:
       - ./dovecot/dovecot.conf.tmpl:/etc/dovecot/dovecot.conf.tmpl:ro
       - ./dovecot/dovecot-sql.conf.ext.tmpl:/etc/dovecot/dovecot-sql.conf.ext.tmpl:ro
       - ./data/mail:/var/mail/vhosts
+      # See the postfix service above for why both cert locations are mounted.
+      - ${LETSENCRYPT_DIR:-/etc/letsencrypt}:/etc/letsencrypt:ro
       - caddy-data:/etc/letsencrypt-caddy:ro
       - dovecot-auth:/var/spool/postfix/private
     networks:
@@ -82,32 +90,12 @@ services:
     networks:
       - mail-internal
 
-  cert-reloader:
-    image: alpine:3.20
-    container_name: cert-reloader
-    restart: unless-stopped
-    environment:
-      MAIL_DOMAIN: ${MAIL_DOMAIN}
-    volumes:
-      - caddy-data:/watch:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        apk add --no-cache inotify-tools docker-cli
-        WATCH_DIR="/watch/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.${MAIL_DOMAIN}"
-        while [ ! -d "$$WATCH_DIR" ]; do
-          echo "waiting for cert dir $$WATCH_DIR";
-          sleep 30;
-        done
-        echo "watching $$WATCH_DIR for cert renewal"
-        while inotifywait -e close_write,move "$$WATCH_DIR" 2>/dev/null; do
-          sleep 5
-          docker kill --signal=SIGHUP postfix || true
-          docker exec dovecot doveadm reload || true
-        done
+  # NOTE: the former `cert-reloader` service is gone. It watched the Caddy data
+  # volume with inotify, which no longer receives the mail certificate — and
+  # watching certbot's live/ directory does not work anyway, because renewal
+  # swaps symlinks rather than rewriting files. Postfix and Dovecot are now
+  # reloaded by the certbot deploy hook that deployments/nginx/setup-nginx.sh
+  # installs at /etc/letsencrypt/renewal-hooks/deploy/reload-plane.sh.
 
 networks:
   mail-internal:

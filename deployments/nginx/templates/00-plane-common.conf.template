@@ -1,0 +1,25 @@
+# ---------------------------------------------------------------------------
+# Gizmo — shared nginx http-level definitions.
+#
+# Rendered by deployments/nginx/setup-nginx.sh into
+# /etc/nginx/conf.d/00-plane-common.conf. Loaded before the per-site configs
+# (conf.d/*.conf is read in alphabetical order), which is why it is prefixed 00.
+#
+# Template variables: ${LISTEN_HTTP_PORT}
+# ---------------------------------------------------------------------------
+
+# WebSocket upgrade helper: "upgrade" for WS handshakes, "close" otherwise.
+map $http_upgrade $plane_connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+# The whole Docker stack sits behind the Caddy container, which is published on
+# loopback only (see the `proxy` service in docker-compose.yml). Caddy does the
+# path routing: /api, /auth, /static -> api:8000, /spaces -> space:3000,
+# /god-mode -> admin:3000, /live -> live:3000, /uploads -> plane-minio:9000,
+# everything else -> web:3000.
+upstream plane_upstream {
+    server 127.0.0.1:${LISTEN_HTTP_PORT};
+    keepalive 32;
+}

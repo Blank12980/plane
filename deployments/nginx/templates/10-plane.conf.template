@@ -1,0 +1,97 @@
+# ---------------------------------------------------------------------------
+# Gizmo web app — https://${APP_DOMAIN}
+#
+# Rendered by deployments/nginx/setup-nginx.sh into
+# /etc/nginx/conf.d/10-plane.conf.
+#
+# Template variables: ${APP_DOMAIN} ${FILE_SIZE_LIMIT} ${BUCKET_NAME}
+# ---------------------------------------------------------------------------
+
+server {
+    listen      80;
+    listen [::]:80;
+    server_name ${APP_DOMAIN};
+
+    # HTTP-01 challenge for certbot renewals. Must stay reachable on plain HTTP.
+    location ^~ /.well-known/acme-challenge/ {
+        root         /var/www/certbot;
+        default_type "text/plain";
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    # `listen ... http2` rather than the newer standalone `http2 on;` so this
+    # config also parses on nginx < 1.25.1 (Debian 12 ships 1.22).
+    listen      443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name ${APP_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/${APP_DOMAIN}/chain.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    access_log /var/log/nginx/plane.access.log;
+    error_log  /var/log/nginx/plane.error.log;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options    "nosniff" always;
+    add_header X-Frame-Options           "SAMEORIGIN" always;
+
+    # Matches FILE_SIZE_LIMIT from the root .env, which is also what the Caddy
+    # container enforces (`request_body max_size`) and what the API advertises
+    # to the uploader. Keep the three in sync or uploads fail at the smallest.
+    client_max_body_size ${FILE_SIZE_LIMIT};
+
+    # The app sends large Cookie/Authorization headers on some editor requests;
+    # Caddy is configured for a 25MB header budget, give nginx room too.
+    large_client_header_buffers 8 64k;
+
+    gzip            on;
+    gzip_proxied    any;
+    gzip_vary       on;
+    gzip_min_length 1024;
+    gzip_types      text/plain text/css text/javascript application/javascript
+                    application/json application/xml image/svg+xml;
+
+    # --- Live collaboration (Hocuspocus / Yjs) — long-lived WebSockets -------
+    location /live/ {
+        include /etc/nginx/conf.d/plane-proxy-params.inc;
+
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection $plane_connection_upgrade;
+
+        proxy_buffering    off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+
+        proxy_pass http://plane_upstream;
+    }
+
+    # --- MinIO object storage ------------------------------------------------
+    # Prefix match without a trailing slash on purpose: the API issues presigned
+    # POSTs to the bucket root (/${BUCKET_NAME}) and presigned GETs to
+    # /${BUCKET_NAME}/<key>. Request buffering is disabled so multi-gigabyte
+    # uploads stream straight through instead of landing in /var/lib/nginx first.
+    location ^~ /${BUCKET_NAME} {
+        include /etc/nginx/conf.d/plane-proxy-params.inc;
+
+        proxy_request_buffering off;
+        proxy_buffering         off;
+        proxy_read_timeout      3600s;
+        proxy_send_timeout      3600s;
+
+        proxy_pass http://plane_upstream;
+    }
+
+    # --- Everything else: web / api / auth / static / spaces / god-mode ------
+    location / {
+        include /etc/nginx/conf.d/plane-proxy-params.inc;
+        proxy_pass http://plane_upstream;
+    }
+}

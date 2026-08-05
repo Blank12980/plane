@@ -1,7 +1,0 @@
-# --- Mail stack integration -----------------------------------------------
-# Stub site for mail.<MAIL_DOMAIN>: its sole purpose is to make Caddy issue
-# a Let's Encrypt certificate. The cert is then mounted read-only from the
-# caddy-data volume into the Postfix/Dovecot containers in mail-stack/.
-mail.{$MAIL_DOMAIN} {
-    respond "" 404
-}

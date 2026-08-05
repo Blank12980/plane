@@ -10,23 +10,31 @@ fi
 : "${MAIL_MASTER_USER:=master}"
 export POSTGRES_HOST
 
-# Resolve the TLS certificate. In production Caddy issues a Let's Encrypt cert
-# for mail.${MAIL_DOMAIN} and shares it read-only via the caddy-data volume. In
-# local mode (no public domain / no cert yet) we fall back to a self-signed cert
-# so Dovecot can still start and serve IMAPS on localhost.
-LE_DIR="/etc/letsencrypt-caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.${MAIL_DOMAIN}"
-LE_CERT="${LE_DIR}/mail.${MAIL_DOMAIN}.crt"
-LE_KEY="${LE_DIR}/mail.${MAIL_DOMAIN}.key"
+# Resolve the TLS certificate. In production certbot on the host issues a
+# Let's Encrypt cert for mail.${MAIL_DOMAIN} (see deployments/nginx/) and
+# /etc/letsencrypt is mounted here read-only. The legacy Caddy-issued location
+# is still probed so an in-place upgrade keeps working until the next renewal.
+# In local mode (no public domain / no cert yet) we fall back to a self-signed
+# cert so Dovecot can still start and serve IMAPS on localhost.
+CERTBOT_DIR="/etc/letsencrypt/live/mail.${MAIL_DOMAIN}"
+CADDY_DIR="/etc/letsencrypt-caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.${MAIL_DOMAIN}"
 
-if [ -f "$LE_CERT" ] && [ -f "$LE_KEY" ]; then
-    SSL_CERT_PATH="$LE_CERT"
-    SSL_KEY_PATH="$LE_KEY"
-    echo "dovecot: using Caddy/Let's Encrypt certificate for mail.${MAIL_DOMAIN}"
-else
+SSL_CERT_PATH=""
+if [ -f "${CERTBOT_DIR}/fullchain.pem" ] && [ -f "${CERTBOT_DIR}/privkey.pem" ]; then
+    SSL_CERT_PATH="${CERTBOT_DIR}/fullchain.pem"
+    SSL_KEY_PATH="${CERTBOT_DIR}/privkey.pem"
+    echo "dovecot: using certbot/Let's Encrypt certificate for mail.${MAIL_DOMAIN}"
+elif [ -f "${CADDY_DIR}/mail.${MAIL_DOMAIN}.crt" ] && [ -f "${CADDY_DIR}/mail.${MAIL_DOMAIN}.key" ]; then
+    SSL_CERT_PATH="${CADDY_DIR}/mail.${MAIL_DOMAIN}.crt"
+    SSL_KEY_PATH="${CADDY_DIR}/mail.${MAIL_DOMAIN}.key"
+    echo "dovecot: using legacy Caddy certificate for mail.${MAIL_DOMAIN}"
+fi
+
+if [ -z "$SSL_CERT_PATH" ]; then
     SSL_CERT_PATH="/etc/dovecot/ssl/mail.crt"
     SSL_KEY_PATH="/etc/dovecot/ssl/mail.key"
     if [ ! -f "$SSL_CERT_PATH" ] || [ ! -f "$SSL_KEY_PATH" ]; then
-        echo "dovecot: no Caddy certificate found, generating self-signed cert for mail.${MAIL_DOMAIN} (local mode)"
+        echo "dovecot: no Let's Encrypt certificate found, generating self-signed cert for mail.${MAIL_DOMAIN} (local mode)"
         mkdir -p /etc/dovecot/ssl
         openssl req -x509 -newkey rsa:2048 -nodes \
             -keyout "$SSL_KEY_PATH" -out "$SSL_CERT_PATH" \

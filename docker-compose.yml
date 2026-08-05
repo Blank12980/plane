@@ -211,7 +211,11 @@ services:
       MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID}
       MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY}
 
-  # Comment this if you already have a reverse proxy running
+  # Internal path-routing proxy. TLS is NOT handled here: the host nginx
+  # front-end (deployments/nginx/) terminates https on :443 and forwards to the
+  # port below, so this container is published on loopback only and must stay
+  # plain HTTP (SITE_ADDRESS=:80). Comment the whole service out if you would
+  # rather point nginx straight at the individual containers.
   proxy:
     container_name: proxy
     build:
@@ -219,16 +223,17 @@ services:
       dockerfile: Dockerfile.ce
     restart: always
     ports:
-      - ${LISTEN_HTTP_PORT}:80
-      - ${LISTEN_HTTPS_PORT}:443
+      - 127.0.0.1:${LISTEN_HTTP_PORT:-8081}:80
     environment:
       FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-5242880}
       BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-uploads}
+      # Must stay a bare port (":80") — see the note above.
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}
-      CERT_EMAIL: ${CERT_EMAIL:-local@plane.local}
-      CERT_ACME_CA: ${CERT_ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
+      # Makes Caddy pass the X-Forwarded-For / X-Forwarded-Proto headers set by
+      # the host nginx through to the API instead of overwriting them. Without
+      # this Django sees the request as plain http and hands out unusable
+      # presigned upload URLs.
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-0.0.0.0/0}
-      MAIL_DOMAIN: ${MAIL_DOMAIN:-}
       GIT_DOMAIN: ${GIT_DOMAIN:-}
     volumes:
       - caddy-data:/data

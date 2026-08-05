@@ -4,14 +4,10 @@ set -e
 mkdir -p /etc/caddy/conf.d
 
 # Clean any previously enabled add-on snippets so this is idempotent across
-# restarts.
+# restarts. mail.caddy is removed unconditionally: the mail stack no longer
+# gets its certificate from Caddy — certbot on the host issues it now — so the
+# snippet must not survive an upgrade from an older deployment.
 rm -f /etc/caddy/conf.d/mail.caddy /etc/caddy/conf.d/git.caddy
-
-# Enable mail stack only when MAIL_DOMAIN is provided; otherwise Caddy would
-# parse subjects like "mail." and "webmail." and reject the config.
-if [ -n "${MAIL_DOMAIN}" ]; then
-    cp /etc/caddy/Caddyfile.mail /etc/caddy/conf.d/mail.caddy
-fi
 
 # Enable forgejo git hosting only when GIT_DOMAIN is provided.
 if [ -n "${GIT_DOMAIN}" ]; then

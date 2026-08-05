@@ -1,8 +1,11 @@
 {
-    email {$CERT_EMAIL}
-    acme_ca {$CERT_ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
-    # acme_dns {$CERT_ACME_DNS} # if Let's Encrypt
-    
+    # TLS is terminated by the host nginx front-end (deployments/nginx/), which
+    # gets its certificates from certbot. Caddy only does path routing over
+    # plain HTTP on :80, bound to loopback — so automatic HTTPS is switched off
+    # here. It would otherwise try (and fail) to bind :443 and run ACME
+    # challenges that nginx already answers.
+    auto_https off
+
     servers {
         max_header_size 25MB
         client_ip_headers X-Forwarded-For X-Real-IP
@@ -36,7 +39,11 @@
     import plane_proxy
 }
 
-# Optional add-on stacks (mail, forgejo). The entrypoint drops snippet files
-# into /etc/caddy/conf.d only when MAIL_DOMAIN / GIT_DOMAIN are set, so this
-# import is a no-op when those features are disabled.
+# Optional add-on stacks (forgejo). The entrypoint drops snippet files into
+# /etc/caddy/conf.d only when GIT_DOMAIN is set, so this import is a no-op when
+# the feature is disabled.
+#
+# There is no mail snippet any more: it existed purely so Caddy would issue a
+# Let's Encrypt certificate for mail.<domain>. certbot on the host owns that
+# certificate now, and Postfix/Dovecot read it from /etc/letsencrypt.
 import /etc/caddy/conf.d/*.caddy
