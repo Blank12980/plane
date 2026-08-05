@@ -170,6 +170,18 @@ install_packages
 
 mkdir -p "$WEBROOT" "$NGINX_CONF_DIR"
 
+# Start nginx on boot and apply a new config. Reload only works on a running
+# service, so fall back to a start/restart — this also covers a first install
+# and the --skip-certbot path, where nothing has started nginx yet.
+reload_nginx() {
+    systemctl enable nginx >/dev/null 2>&1 || true
+    if systemctl is-active --quiet nginx; then
+        systemctl reload nginx
+    else
+        systemctl restart nginx
+    fi
+}
+
 # --- Free port 80/443 from the stack ---------------------------------------
 if command -v ss >/dev/null && ss -lntp 2>/dev/null | grep -qE ':(80|443)[[:space:]].*docker-proxy'; then
     warn "A Docker container is still publishing port 80 and/or 443."
@@ -191,8 +203,7 @@ if [[ "$SKIP_CERTBOT" -eq 0 ]]; then
         < "${TEMPLATE_DIR}/bootstrap.conf.template" > "${NGINX_CONF_DIR}/00-plane-bootstrap.conf"
 
     nginx -t
-    systemctl enable --now nginx >/dev/null 2>&1 || true
-    systemctl reload nginx 2>/dev/null || systemctl restart nginx
+    reload_nginx
 
     # --- Obtain one certificate per domain ---------------------------------
     # Separate certs (not one SAN cert) so /etc/letsencrypt/live/<domain>/ paths
@@ -249,7 +260,7 @@ for domain in "${DOMAINS[@]}"; do
 done
 
 nginx -t
-systemctl reload nginx
+reload_nginx
 
 # --- Renewal hook: reload nginx and the mail daemons ------------------------
 log "Installing certbot renewal deploy hook"
