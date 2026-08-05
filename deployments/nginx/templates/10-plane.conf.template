@@ -59,12 +59,16 @@ server {
     gzip_types      text/plain text/css text/javascript application/javascript
                     application/json application/xml image/svg+xml;
 
+    # Defaults for every location below. Set here, not in the shared .inc: a
+    # location that needs a longer timeout overrides an inherited value, but
+    # cannot redeclare one the .inc already pulled into the same context.
+    proxy_connect_timeout 60s;
+    proxy_send_timeout    300s;
+    proxy_read_timeout    300s;
+
     # --- Live collaboration (Hocuspocus / Yjs) — long-lived WebSockets -------
     location /live/ {
         include /etc/nginx/conf.d/plane-proxy-params.inc;
-
-        proxy_set_header Upgrade    $http_upgrade;
-        proxy_set_header Connection $plane_connection_upgrade;
 
         proxy_buffering    off;
         proxy_read_timeout 3600s;

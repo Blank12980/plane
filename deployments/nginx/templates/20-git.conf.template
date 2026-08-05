@@ -47,6 +47,11 @@ server {
     # site still caps the body at FILE_SIZE_LIMIT.
     client_max_body_size 0;
 
+    # Defaults the location below overrides — see the note in 10-plane.conf.
+    proxy_connect_timeout 60s;
+    proxy_send_timeout    300s;
+    proxy_read_timeout    300s;
+
     location / {
         include /etc/nginx/conf.d/plane-proxy-params.inc;
 

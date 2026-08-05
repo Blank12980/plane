@@ -8,10 +8,12 @@
 # Template variables: ${LISTEN_HTTP_PORT}
 # ---------------------------------------------------------------------------
 
-# WebSocket upgrade helper: "upgrade" for WS handshakes, "close" otherwise.
+# WebSocket upgrade helper. Empty rather than "close" for ordinary requests:
+# nginx omits headers that evaluate to an empty string, so the upstream keepalive
+# below stays usable instead of every request tearing its connection down.
 map $http_upgrade $plane_connection_upgrade {
     default upgrade;
-    ''      close;
+    ''      "";
 }
 
 # The whole Docker stack sits behind the Caddy container, which is published on
