@@ -40,6 +40,7 @@ class WorkSpaceMemberViewSet(BaseViewSet):
             .get_queryset()
             .filter(
                 workspace__slug=self.kwargs.get("slug"),
+                is_active=True,
                 is_instance_admin_access=False,
             )
             .select_related("member", "member__avatar_asset")

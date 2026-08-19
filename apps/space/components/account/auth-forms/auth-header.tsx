@@ -22,12 +22,12 @@ type TAuthHeaderDetails = {
 
 const Titles: TAuthHeaderDetails = {
   [EAuthModes.SIGN_IN]: {
-    header: "Sign in to upvote or comment",
-    subHeader: "Contribute in nudging the features you want to get built.",
+    header: "Войдите, чтобы голосовать и комментировать",
+    subHeader: "Помогите выбрать функции, которые стоит сделать.",
   },
   [EAuthModes.SIGN_UP]: {
-    header: "View, comment, and do more",
-    subHeader: "Sign up or log in to work with Gizmo work items and Pages.",
+    header: "Смотрите, комментируйте и не только",
+    subHeader: "Зарегистрируйтесь или войдите, чтобы работать с элементами и страницами Gizmo.",
   },
 };
 
@@ -40,8 +40,8 @@ export function AuthHeader(props: TAuthHeader) {
     }
 
     return {
-      header: "Comment or react to work items",
-      subHeader: "Use Gizmo to add your valuable inputs to features.",
+      header: "Комментируйте и реагируйте на рабочие элементы",
+      subHeader: "Используйте Gizmo, чтобы добавлять свои мысли к функциям.",
     };
   };
 

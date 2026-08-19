@@ -93,6 +93,7 @@ export const MemberOptions = observer(function MemberOptions(props: Props) {
   const options = memberIds
     ?.map((userId) => {
       const userDetails = getUserDetails(userId);
+      if (!userDetails) return null;
       return {
         value: userId,
         query: `${userDetails?.display_name} ${userDetails?.first_name} ${userDetails?.last_name}`,

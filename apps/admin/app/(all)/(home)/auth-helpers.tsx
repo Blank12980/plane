@@ -22,56 +22,57 @@ const errorCodeMessages: {
 } = {
   // admin
   [EAdminAuthErrorCodes.ADMIN_ALREADY_EXIST]: {
-    title: `Admin already exists`,
-    message: () => `Admin already exists. Please try again.`,
+    title: `Администратор уже существует`,
+    message: () => `Администратор уже существует. Попробуйте ещё раз.`,
   },
   [EAdminAuthErrorCodes.REQUIRED_ADMIN_EMAIL_PASSWORD_FIRST_NAME]: {
-    title: `Email, password and first name required`,
-    message: () => `Email, password and first name required. Please try again.`,
+    title: `Требуются email, пароль и имя`,
+    message: () => `Требуются email, пароль и имя. Попробуйте ещё раз.`,
   },
   [EAdminAuthErrorCodes.INVALID_ADMIN_EMAIL]: {
-    title: `Invalid admin email`,
-    message: () => `Invalid admin email. Please try again.`,
+    title: `Неверный email администратора`,
+    message: () => `Неверный email администратора. Попробуйте ещё раз.`,
   },
   [EAdminAuthErrorCodes.INVALID_ADMIN_PASSWORD]: {
-    title: `Invalid admin password`,
-    message: () => `Invalid admin password. Please try again.`,
+    title: `Неверный пароль администратора`,
+    message: () => `Неверный пароль администратора. Попробуйте ещё раз.`,
   },
   [EAdminAuthErrorCodes.REQUIRED_ADMIN_EMAIL_PASSWORD]: {
-    title: `Email and password required`,
-    message: () => `Email and password required. Please try again.`,
+    title: `Требуются email и пароль`,
+    message: () => `Требуются email и пароль. Попробуйте ещё раз.`,
   },
   [EAdminAuthErrorCodes.ADMIN_AUTHENTICATION_FAILED]: {
-    title: `Authentication failed`,
-    message: () => `Authentication failed. Please try again.`,
+    title: `Ошибка аутентификации`,
+    message: () => `Ошибка аутентификации. Попробуйте ещё раз.`,
   },
   [EAdminAuthErrorCodes.ADMIN_USER_ALREADY_EXIST]: {
-    title: `Admin user already exists`,
+    title: `Администратор уже существует`,
     message: () => (
       <div>
-        Admin user already exists.&nbsp;
+        Администратор уже существует.&nbsp;
         <Link className="font-medium underline underline-offset-4 transition-all hover:font-bold" href={`/admin`}>
-          Sign In
+          Войти
         </Link>
-        &nbsp;now.
+        &nbsp;сейчас.
       </div>
     ),
   },
   [EAdminAuthErrorCodes.ADMIN_USER_DOES_NOT_EXIST]: {
-    title: `Admin user does not exist`,
+    title: `Администратор не найден`,
     message: () => (
       <div>
-        Admin user does not exist.&nbsp;
+        Администратор не найден.&nbsp;
         <Link className="font-medium underline underline-offset-4 transition-all hover:font-bold" href={`/admin`}>
-          Sign In
+          Войти
         </Link>
-        &nbsp;now.
+        &nbsp;сейчас.
       </div>
     ),
   },
   [EAdminAuthErrorCodes.ADMIN_USER_DEACTIVATED]: {
-    title: `User account deactivated`,
-    message: () => `User account deactivated. Please contact ${SUPPORT_EMAIL ? SUPPORT_EMAIL : "administrator"}.`,
+    title: `Аккаунт деактивирован`,
+    message: () =>
+      `Аккаунт деактивирован. Обратитесь к ${SUPPORT_EMAIL ? SUPPORT_EMAIL : "администратору"}.`,
   },
 };
 

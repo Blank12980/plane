@@ -24,7 +24,7 @@ export function PasswordInput({
   id,
   value,
   onChange,
-  placeholder = "Enter your password",
+  placeholder = "Введите пароль",
   className,
   showToggle = true,
   error = false,

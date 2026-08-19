@@ -23,27 +23,27 @@ export const DURATION_FILTER_OPTIONS: {
 }[] = [
   {
     key: EDurationFilters.NONE,
-    label: "All time",
+    label: "За всё время",
   },
   {
     key: EDurationFilters.TODAY,
-    label: "Due today",
+    label: "Срок сегодня",
   },
   {
     key: EDurationFilters.THIS_WEEK,
-    label: "Due this week",
+    label: "Срок на этой неделе",
   },
   {
     key: EDurationFilters.THIS_MONTH,
-    label: "Due this month",
+    label: "Срок в этом месяце",
   },
   {
     key: EDurationFilters.THIS_YEAR,
-    label: "Due this year",
+    label: "Срок в этом году",
   },
   {
     key: EDurationFilters.CUSTOM,
-    label: "Custom",
+    label: "Свой период",
   },
 ];
 
@@ -66,15 +66,15 @@ export const FILTERED_ISSUES_TABS_LIST: {
 }[] = [
   {
     key: "upcoming",
-    label: "Upcoming",
+    label: "Предстоящие",
   },
   {
     key: "overdue",
-    label: "Overdue",
+    label: "Просроченные",
   },
   {
     key: "completed",
-    label: "Marked completed",
+    label: "Отмечены выполненными",
   },
 ];
 
@@ -85,11 +85,11 @@ export const UNFILTERED_ISSUES_TABS_LIST: {
 }[] = [
   {
     key: "pending",
-    label: "Pending",
+    label: "В работе",
   },
   {
     key: "completed",
-    label: "Marked completed",
+    label: "Отмечены выполненными",
   },
 ];
 

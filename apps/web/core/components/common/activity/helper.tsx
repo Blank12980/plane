@@ -87,8 +87,8 @@ export const messages = (activity: TProjectActivity): { message: string | ReactN
   const workspaceDetail = store.workspaceRoot.getWorkspaceById(activity.workspace);
 
   const getBooleanActionText = (value: string | undefined) => {
-    if (value === "true") return "enabled";
-    if (value === "false") return "disabled";
+    if (value === "true") return "включил(а)";
+    if (value === "false") return "отключил(а)";
     return verb;
   };
 
@@ -97,26 +97,26 @@ export const messages = (activity: TProjectActivity): { message: string | ReactN
       return {
         message: (
           <>
-            set the priority to <span className="font-medium text-primary">{newValue || "none"}</span>
+            установил(а) приоритет <span className="font-medium text-primary">{newValue || "нет"}</span>
           </>
         ),
       };
     case "archived_at":
       return {
-        message: newValue === "restore" ? "restored the project" : "archived the project",
+        message: newValue === "restore" ? "восстановил(а) проект" : "архивировал(а) проект",
         customUserName: newValue === "archive" ? "Gizmo" : undefined,
       };
     case "name":
       return {
         message: (
           <>
-            renamed the project to <span className="font-medium text-primary">{newValue}</span>
+            переименовал(а) проект в <span className="font-medium text-primary">{newValue}</span>
           </>
         ),
       };
     case "description":
       return {
-        message: newValue ? "updated the project description" : "removed the project description",
+        message: newValue ? "обновил(а) описание проекта" : "удалил(а) описание проекта",
       };
     case "start_date":
       return {
@@ -124,10 +124,10 @@ export const messages = (activity: TProjectActivity): { message: string | ReactN
           <>
             {newValue ? (
               <>
-                set the start date to <span className="font-medium text-primary">{newValue}</span>
+                установил(а) дату начала <span className="font-medium text-primary">{newValue}</span>
               </>
             ) : (
-              "removed the start date"
+              "удалил(а) дату начала"
             )}
           </>
         ),
@@ -138,10 +138,10 @@ export const messages = (activity: TProjectActivity): { message: string | ReactN
           <>
             {newValue ? (
               <>
-                set the target date to <span className="font-medium text-primary">{newValue}</span>
+                установил(а) срок <span className="font-medium text-primary">{newValue}</span>
               </>
             ) : (
-              "removed the target date"
+              "удалил(а) срок"
             )}
           </>
         ),
@@ -150,7 +150,7 @@ export const messages = (activity: TProjectActivity): { message: string | ReactN
       return {
         message: (
           <>
-            set the state to <span className="font-medium text-primary">{newValue || "none"}</span>
+            установил(а) статус <span className="font-medium text-primary">{newValue || "нет"}</span>
           </>
         ),
       };
@@ -160,11 +160,11 @@ export const messages = (activity: TProjectActivity): { message: string | ReactN
           <>
             {newValue ? (
               <>
-                set the estimate point to <span className="font-medium text-primary">{newValue}</span>
+                установил(а) оценку <span className="font-medium text-primary">{newValue}</span>
               </>
             ) : (
               <>
-                removed the estimate point
+                удалил(а) оценку
                 {oldValue && (
                   <>
                     {" "}
@@ -181,7 +181,7 @@ export const messages = (activity: TProjectActivity): { message: string | ReactN
         message: (
           <>
             <span>
-              {verb} this project {verb === "removed" ? "from" : "to"} the cycle{" "}
+              {verb === "removed" ? "убрал(а) проект из цикла" : `${verb} проект в цикл`}{" "}
             </span>
             {verb !== "removed" ? (
               <a
@@ -193,7 +193,7 @@ export const messages = (activity: TProjectActivity): { message: string | ReactN
                 {activity.new_value}
               </a>
             ) : (
-              <span className="font-medium text-primary">{activity.old_value || "Unknown cycle"}</span>
+              <span className="font-medium text-primary">{activity.old_value || "Неизвестный цикл"}</span>
             )}
           </>
         ),
@@ -203,10 +203,10 @@ export const messages = (activity: TProjectActivity): { message: string | ReactN
         message: (
           <>
             <span>
-              {verb} this project {verb === "removed" ? "from" : "to"} the module{" "}
+              {verb === "removed" ? "убрал(а) проект из модуля" : `${verb} проект в модуль`}{" "}
             </span>
             <span className="font-medium text-primary">
-              {verb === "removed" ? oldValue : newValue || "Unknown module"}
+              {verb === "removed" ? oldValue : newValue || "Неизвестный модуль"}
             </span>
           </>
         ),
@@ -215,33 +215,33 @@ export const messages = (activity: TProjectActivity): { message: string | ReactN
       return {
         message: (
           <>
-            {verb} the label{" "}
-            <span className="font-medium text-primary">{newValue || oldValue || "Untitled label"}</span>
+            {verb} метку{" "}
+            <span className="font-medium text-primary">{newValue || oldValue || "Без названия"}</span>
           </>
         ),
       };
     case "inbox":
       return {
-        message: <>{newValue ? "enabled" : "disabled"} inbox</>,
+        message: <>{newValue ? "включил(а)" : "отключил(а)"} входящие</>,
       };
     case "page":
       return {
         message: (
           <>
-            {newValue ? "created" : "removed"} the project page{" "}
-            <span className="font-medium text-primary">{newValue || oldValue || "Untitled page"}</span>
+            {newValue ? "создал(а)" : "удалил(а)"} страницу проекта{" "}
+            <span className="font-medium text-primary">{newValue || oldValue || "Без названия"}</span>
           </>
         ),
       };
     case "network":
       return {
-        message: <>{newValue ? "enabled" : "disabled"} network access</>,
+        message: <>{newValue ? "включил(а)" : "отключил(а)"} сетевой доступ</>,
       };
     case "identifier":
       return {
         message: (
           <>
-            updated project identifier to <span className="font-medium text-primary">{newValue || "none"}</span>
+            обновил(а) идентификатор проекта на <span className="font-medium text-primary">{newValue || "нет"}</span>
           </>
         ),
       };
@@ -249,7 +249,7 @@ export const messages = (activity: TProjectActivity): { message: string | ReactN
       return {
         message: (
           <>
-            changed project timezone to <span className="font-medium text-primary">{newValue || "default"}</span>
+            изменил(а) часовой пояс проекта на <span className="font-medium text-primary">{newValue || "по умолчанию"}</span>
           </>
         ),
       };
@@ -261,29 +261,29 @@ export const messages = (activity: TProjectActivity): { message: string | ReactN
       return {
         message: (
           <>
-            {getBooleanActionText(newValue)} {activityType.replace(/_view$/, "").replace(/_/g, " ")} view
+            {getBooleanActionText(newValue)} представление {activityType.replace(/_view$/, "").replace(/_/g, " ")}
           </>
         ),
       };
     case "is_project_updates_enabled":
       return {
-        message: <>{getBooleanActionText(newValue)} project updates</>,
+        message: <>{getBooleanActionText(newValue)} обновления проекта</>,
       };
     case "is_epic_enabled":
       return {
-        message: <>{getBooleanActionText(newValue)} epics</>,
+        message: <>{getBooleanActionText(newValue)} эпики</>,
       };
     case "is_workflow_enabled":
       return {
-        message: <>{getBooleanActionText(newValue)} custom workflow</>,
+        message: <>{getBooleanActionText(newValue)} свой рабочий процесс</>,
       };
     case "is_time_tracking_enabled":
       return {
-        message: <>{getBooleanActionText(newValue)} time tracking</>,
+        message: <>{getBooleanActionText(newValue)} учёт времени</>,
       };
     case "is_issue_type_enabled":
       return {
-        message: <>{getBooleanActionText(newValue)} work item types</>,
+        message: <>{getBooleanActionText(newValue)} типы рабочих элементов</>,
       };
     default:
       return {

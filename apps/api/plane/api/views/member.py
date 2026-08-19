@@ -81,6 +81,7 @@ class WorkspaceMemberAPIEndpoint(BaseAPIView):
 
         workspace_members = WorkspaceMember.objects.filter(
             workspace__slug=slug,
+            is_active=True,
             is_instance_admin_access=False,
         ).select_related("member")
 
@@ -138,6 +139,7 @@ class ProjectMemberListCreateAPIEndpoint(BaseAPIView):
         project_members = ProjectMember.objects.filter(
             project_id=project_id,
             workspace__slug=slug,
+            is_active=True,
             is_instance_admin_access=False,
         ).values_list("member_id", flat=True)
 

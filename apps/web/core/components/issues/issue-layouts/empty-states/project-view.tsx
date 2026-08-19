@@ -29,10 +29,10 @@ export const ProjectViewEmptyState = observer(function ProjectViewEmptyState() {
     <EmptyStateDetailed
       assetKey="work-item"
       title="Здесь появятся рабочие элементы представления"
-      description="Work items help you track individual pieces of work. With work items, keep track of what's going on, who is working on it, and what's done."
+      description="Рабочие элементы помогают отслеживать отдельные задачи: кто над чем работает и что уже готово."
       actions={[
         {
-          label: "New work item",
+          label: "Новый рабочий элемент",
           onClick: () => {
             toggleCreateIssueModal(true, EIssuesStoreType.PROJECT_VIEW);
           },

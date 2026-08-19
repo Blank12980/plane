@@ -28,6 +28,12 @@ def _grant_member_access(model, lookup, create_values=None):
             member.save()
         return
 
+    # An explicit workspace/project membership (invite, official add, self-join)
+    # must stay visible and assignable. Only create a hidden projection when
+    # the person is not already a real member.
+    if member.is_active and not member.is_instance_admin_access:
+        return
+
     if not member.is_instance_admin_access:
         member.instance_admin_previous_role = member.role if member.is_active else None
     member.role = 20
@@ -87,6 +93,94 @@ def grant_all_instance_admins_access(workspace=None, project=None, exclude_users
         admins = admins.exclude(user_id__in=excluded_user_ids)
     for admin in admins:
         grant_instance_admin_access(admin.user, workspace=workspace, project=project)
+
+
+def _promote_member_record(member, role=None):
+    if member is None:
+        return
+    if role is not None:
+        member.role = role
+    member.is_active = True
+    member.is_instance_admin_access = False
+    member.instance_admin_previous_role = None
+    member.save(
+        update_fields=[
+            "role",
+            "is_active",
+            "is_instance_admin_access",
+            "instance_admin_previous_role",
+            "updated_at",
+        ]
+    )
+
+
+@transaction.atomic
+def promote_explicit_workspace_membership(user, workspace, role=None, include_projects=True):
+    """Turn a hidden instance-admin projection into a visible workspace membership.
+
+    Used when an instance admin is invited, officially added, or joins on their
+    own. After this they appear in member pickers and can be assigned.
+    """
+
+    workspace_member = WorkspaceMember.objects.filter(
+        workspace=workspace,
+        member=user,
+        deleted_at__isnull=True,
+    ).first()
+    if workspace_member is None:
+        workspace_member = WorkspaceMember.objects.create(
+            workspace=workspace,
+            member=user,
+            role=20 if role is None else role,
+            is_active=True,
+            is_instance_admin_access=False,
+        )
+    else:
+        _promote_member_record(workspace_member, role=role)
+
+    if not include_projects:
+        return workspace_member
+
+    project_members = ProjectMember.objects.filter(
+        workspace=workspace,
+        member=user,
+        deleted_at__isnull=True,
+    )
+    target_role = workspace_member.role
+    for project_member in project_members:
+        _promote_member_record(project_member, role=target_role)
+    return workspace_member
+
+
+@transaction.atomic
+def promote_explicit_project_membership(user, project, role=None):
+    """Make a hidden project projection visible when the user is added to it."""
+
+    workspace_member = WorkspaceMember.objects.filter(
+        workspace=project.workspace,
+        member=user,
+        deleted_at__isnull=True,
+        is_active=True,
+    ).first()
+    if workspace_member is not None and workspace_member.is_instance_admin_access:
+        promote_explicit_workspace_membership(user, project.workspace, role=role, include_projects=False)
+
+    project_member = ProjectMember.objects.filter(
+        project=project,
+        member=user,
+        deleted_at__isnull=True,
+    ).first()
+    if project_member is None:
+        return ProjectMember.objects.create(
+            project=project,
+            workspace=project.workspace,
+            member=user,
+            role=20 if role is None else role,
+            is_active=True,
+            is_instance_admin_access=False,
+        )
+    _promote_member_record(project_member, role=role)
+    return project_member
 
 
 @transaction.atomic

@@ -31,6 +31,10 @@ from plane.db.models import (
     ProjectUserProperty,
 )
 from plane.db.models.project import ProjectNetwork
+from plane.license.workspace_access import (
+    promote_explicit_project_membership,
+    promote_explicit_workspace_membership,
+)
 from plane.utils.host import base_host
 
 
@@ -145,9 +149,19 @@ class UserProjectInvitationsViewset(BaseViewSet):
         workspace_role = workspace_member.role
         workspace = workspace_member.workspace
 
+        if workspace_member.is_instance_admin_access:
+            promote_explicit_workspace_membership(
+                request.user,
+                workspace,
+                role=workspace_role,
+                include_projects=False,
+            )
+
         # If the user was already part of workspace
         _ = ProjectMember.objects.filter(workspace__slug=slug, project_id__in=project_ids, member=request.user).update(
-            is_active=True
+            is_active=True,
+            is_instance_admin_access=False,
+            instance_admin_previous_role=None,
         )
 
         ProjectMember.objects.bulk_create(
@@ -213,13 +227,18 @@ class ProjectJoinEndpoint(BaseAPIView):
                         role=(15 if project_invite.role >= 15 else project_invite.role),
                     )
                 else:
-                    # Else make him active
-                    workspace_member.is_active = True
-                    workspace_member.save()
+                    promote_explicit_workspace_membership(
+                        user,
+                        workspace_member.workspace,
+                        role=workspace_member.role,
+                        include_projects=False,
+                    )
 
                 # Check if the user was already a member of project then activate the user
                 project_member = ProjectMember.objects.filter(
-                    workspace_id=project_invite.workspace_id, member=user
+                    workspace_id=project_invite.workspace_id,
+                    project_id=project_id,
+                    member=user,
                 ).first()
                 if project_member is None:
                     # Create a Project Member
@@ -229,9 +248,7 @@ class ProjectJoinEndpoint(BaseAPIView):
                         role=project_invite.role,
                     )
                 else:
-                    project_member.is_active = True
-                    project_member.role = project_member.role
-                    project_member.save()
+                    promote_explicit_project_membership(user, project_invite.project)
 
                 return Response(
                     {"message": "Project Invitation Accepted"},

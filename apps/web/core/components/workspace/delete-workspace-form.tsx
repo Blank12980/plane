@@ -96,12 +96,12 @@ export const DeleteWorkspaceForm = observer(function DeleteWorkspaceForm(props: 
             <p className="mt-1 text-body-xs-regular text-secondary">
               You are about to delete the workspace{" "}
               <span className="text-body-xs-semibold break-words">{data?.name}</span>. If you confirm, you will lose
-              access to all your work data in this workspace without any way to restore it. Tread very carefully.
+              доступ ко всем данным этого рабочего пространства без возможности восстановления. Действуйте осторожно.
             </p>
           </div>
 
           <div className="mt-4 text-secondary">
-            <p className="text-body-xs-regular break-words">Type in this workspace&apos;s name to continue.</p>
+            <p className="text-body-xs-regular break-words">Введите название этого рабочего пространства, чтобы продолжить.</p>
             <Controller
               control={control}
               name="workspaceName"

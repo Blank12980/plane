@@ -8,7 +8,7 @@ import type { TCoreLoginMediums } from "@plane/types";
 
 export const CORE_LOGIN_MEDIUM_LABELS: Record<TCoreLoginMediums, string> = {
   email: "Email",
-  "magic-code": "Magic code",
+  "magic-code": "Код из письма",
   github: "GitHub",
   gitlab: "GitLab",
   google: "Google",

@@ -28,6 +28,7 @@ from plane.app.views.base import BaseAPIView
 from plane.bgtasks.event_tracking_task import track_event
 from plane.bgtasks.workspace_invitation_task import workspace_invitation
 from plane.db.models import User, Workspace, WorkspaceMember, WorkspaceMemberInvite
+from plane.license.workspace_access import promote_explicit_workspace_membership
 from plane.utils.cache import invalidate_cache, invalidate_cache_directly
 from plane.utils.host import base_host
 from plane.utils.analytics_events import USER_JOINED_WORKSPACE, USER_INVITED_TO_WORKSPACE
@@ -69,11 +70,12 @@ class WorkspaceInvitationsViewset(BaseViewSet):
         # Get the workspace object
         workspace = Workspace.objects.get(slug=slug)
 
-        # Check if user is already a member of workspace
+        # Hidden instance-admin projections are not real memberships.
         workspace_members = WorkspaceMember.objects.filter(
             workspace_id=workspace.id,
             member__email__in=[email.get("email") for email in emails],
             is_active=True,
+            is_instance_admin_access=False,
         ).select_related("member", "member__avatar_asset")
 
         if workspace_members:
@@ -89,9 +91,25 @@ class WorkspaceInvitationsViewset(BaseViewSet):
         for email in emails:
             try:
                 validate_email(email.get("email"))
+                invited_email = email.get("email").strip().lower()
+                existing_user = User.objects.filter(email=invited_email, is_bot=False).first()
+                if existing_user is not None:
+                    background_member = WorkspaceMember.objects.filter(
+                        workspace=workspace,
+                        member=existing_user,
+                        is_active=True,
+                        is_instance_admin_access=True,
+                    ).first()
+                    if background_member is not None:
+                        promote_explicit_workspace_membership(
+                            existing_user,
+                            workspace,
+                            role=email.get("role", 5),
+                        )
+                        continue
                 workspace_invitations.append(
                     WorkspaceMemberInvite(
-                        email=email.get("email").strip().lower(),
+                        email=invited_email,
                         workspace_id=workspace.id,
                         token=jwt.encode(
                             {"email": email, "timestamp": datetime.now().timestamp()},
@@ -189,9 +207,11 @@ class WorkspaceJoinEndpoint(BaseAPIView):
                         workspace=workspace_invite.workspace, member=user
                     ).first()
                     if workspace_member is not None:
-                        workspace_member.is_active = True
-                        workspace_member.role = workspace_invite.role
-                        workspace_member.save()
+                        promote_explicit_workspace_membership(
+                            user,
+                            workspace_invite.workspace,
+                            role=workspace_invite.role,
+                        )
                     else:
                         # Create a Workspace
                         _ = WorkspaceMember.objects.create(

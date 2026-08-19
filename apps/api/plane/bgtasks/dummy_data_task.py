@@ -22,6 +22,7 @@ from plane.db.models import (
     ProjectMember,
     State,
     StateGroup,
+    DEFAULT_STATES,
     Label,
     Cycle,
     Module,
@@ -80,29 +81,7 @@ def create_project_members(workspace, project, members):
 
 
 def create_states(workspace, project, user_id):
-    states = [
-        {
-            "name": "Backlog",
-            "color": "#A3A3A3",
-            "sequence": 15000,
-            "group": "backlog",
-            "default": True,
-        },
-        {"name": "Todo", "color": "#3A3A3A", "sequence": 25000, "group": "unstarted"},
-        {
-            "name": "In Progress",
-            "color": "#F59E0B",
-            "sequence": 35000,
-            "group": "started",
-        },
-        {"name": "Done", "color": "#16A34A", "sequence": 45000, "group": "completed"},
-        {
-            "name": "Cancelled",
-            "color": "#EF4444",
-            "sequence": 55000,
-            "group": "cancelled",
-        },
-    ]
+    states = [state for state in DEFAULT_STATES if state["group"] != StateGroup.TRIAGE.value]
 
     states = State.objects.bulk_create(
         [

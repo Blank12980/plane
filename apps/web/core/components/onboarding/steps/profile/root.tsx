@@ -147,7 +147,7 @@ export const ProfileSetupStep = observer(function ProfileSetupStep({ handleStepC
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-10">
       {/* Header */}
-      <CommonOnboardingHeader title="Создайте профиль." description="This is how you will appear in Gizmo." />
+      <CommonOnboardingHeader title="Создайте профиль." description="Так вас будут видеть в Gizmo." />
 
       {/* Profile Picture Section */}
       <Controller

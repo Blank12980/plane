@@ -10,6 +10,10 @@ from rest_framework import status
 
 from plane.db.models import Project, ProjectMember, User, Workspace, WorkspaceMember
 from plane.license.models import Instance, InstanceAdmin
+from plane.license.workspace_access import (
+    grant_instance_admin_access,
+    promote_explicit_workspace_membership,
+)
 
 
 @pytest.fixture
@@ -235,3 +239,88 @@ class TestInstanceManagement:
         api_client.force_authenticate(user=user)
 
         assert api_client.get("/api/instances/users/").status_code == status.HTTP_403_FORBIDDEN
+
+    @pytest.mark.django_db
+    def test_explicit_member_stays_visible_after_becoming_instance_admin(self, managed_instance):
+        admin = create_user("admin@gizmo.so")
+        owner = create_user("owner@gizmo.so")
+        workspace = Workspace.objects.create(name="Workspace", slug="workspace", owner=owner)
+        WorkspaceMember.objects.create(workspace=workspace, member=admin, role=15)
+        project = Project.objects.create(name="Project", identifier="PRJ", workspace=workspace, created_by=owner)
+        ProjectMember.objects.create(project=project, workspace=workspace, member=admin, role=15)
+
+        grant_instance_admin_access(admin)
+
+        workspace_member = WorkspaceMember.objects.get(workspace=workspace, member=admin)
+        project_member = ProjectMember.objects.get(project=project, member=admin)
+        assert workspace_member.is_instance_admin_access is False
+        assert workspace_member.role == 15
+        assert workspace_member.is_active is True
+        assert project_member.is_instance_admin_access is False
+        assert project_member.role == 15
+
+    @pytest.mark.django_db
+    def test_promoting_hidden_admin_makes_them_visible_and_assignable(self, managed_instance):
+        admin = create_user("admin@gizmo.so")
+        owner = create_user("owner@gizmo.so")
+        workspace = Workspace.objects.create(name="Workspace", slug="visible-admin", owner=owner)
+        InstanceAdmin.objects.create(instance=managed_instance, user=admin, role=20)
+        project = Project.objects.create(name="Project", identifier="VIS", workspace=workspace, created_by=owner)
+
+        hidden = WorkspaceMember.objects.get(workspace=workspace, member=admin)
+        assert hidden.is_instance_admin_access is True
+
+        promote_explicit_workspace_membership(admin, workspace, role=15)
+
+        workspace_member = WorkspaceMember.objects.get(workspace=workspace, member=admin)
+        project_member = ProjectMember.objects.get(project=project, member=admin)
+        assert workspace_member.is_instance_admin_access is False
+        assert workspace_member.role == 15
+        assert project_member.is_instance_admin_access is False
+        assert project_member.role == 15
+
+    @pytest.mark.django_db
+    def test_project_member_list_hides_background_admins_and_keeps_explicit_ones(
+        self, api_client, managed_instance
+    ):
+        owner = create_user("owner@gizmo.so")
+        hidden_admin = create_user("hidden@gizmo.so")
+        explicit_admin = create_user("explicit@gizmo.so")
+        workspace = Workspace.objects.create(name="Workspace", slug="picker-workspace", owner=owner)
+        WorkspaceMember.objects.create(workspace=workspace, member=owner, role=20)
+        InstanceAdmin.objects.create(instance=managed_instance, user=hidden_admin, role=20)
+        InstanceAdmin.objects.create(instance=managed_instance, user=explicit_admin, role=20)
+        project = Project.objects.create(name="Project", identifier="PCK", workspace=workspace, created_by=owner)
+        ProjectMember.objects.create(project=project, workspace=workspace, member=owner, role=20)
+        promote_explicit_workspace_membership(explicit_admin, workspace, role=20)
+
+        api_client.force_authenticate(user=owner)
+        response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/members/")
+
+        assert response.status_code == status.HTTP_200_OK
+        member_ids = {str(item["member"]) for item in response.data}
+        assert str(owner.id) in member_ids
+        assert str(explicit_admin.id) in member_ids
+        assert str(hidden_admin.id) not in member_ids
+
+    @pytest.mark.django_db
+    def test_god_mode_can_add_instance_admin_as_explicit_workspace_member(self, api_client, managed_instance):
+        super_admin = create_user("root@gizmo.so")
+        delegated_admin = create_user("delegated@gizmo.so")
+        owner = create_user("owner@gizmo.so")
+        workspace = Workspace.objects.create(name="Workspace", slug="god-add", owner=owner)
+        InstanceAdmin.objects.create(instance=managed_instance, user=super_admin, role=20)
+        InstanceAdmin.objects.create(instance=managed_instance, user=delegated_admin, role=15)
+        api_client.force_authenticate(user=super_admin)
+
+        response = api_client.post(
+            f"/api/instances/workspaces/{workspace.id}/members/",
+            {"email": delegated_admin.email, "role": 15},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        workspace_member = WorkspaceMember.objects.get(workspace=workspace, member=delegated_admin)
+        assert workspace_member.is_instance_admin_access is False
+        assert workspace_member.role == 15
+        assert workspace_member.is_active is True

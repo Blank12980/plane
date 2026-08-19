@@ -23,14 +23,14 @@ export type TCoreSidebarMenuKey =
 export const coreSidebarMenuLinks: Record<TCoreSidebarMenuKey, TSidebarMenuItem> = {
   general: {
     Icon: Cog,
-    name: "General",
-    description: "Identify your instances and get key details.",
+    name: "Общее",
+    description: "Название экземпляра и основные сведения.",
     href: `/general/`,
   },
   email: {
     Icon: Mail,
     name: "Email",
-    description: "Configure your SMTP controls.",
+    description: "Настройка SMTP для исходящей почты.",
     href: `/email/`,
   },
   mail: {
@@ -41,8 +41,8 @@ export const coreSidebarMenuLinks: Record<TCoreSidebarMenuKey, TSidebarMenuItem>
   },
   workspace: {
     Icon: WorkspaceIcon,
-    name: "Workspaces",
-    description: "Manage all workspaces on this instance.",
+    name: "Пространства",
+    description: "Управление рабочими пространствами экземпляра.",
     href: `/workspace/`,
   },
   users: {
@@ -53,20 +53,20 @@ export const coreSidebarMenuLinks: Record<TCoreSidebarMenuKey, TSidebarMenuItem>
   },
   authentication: {
     Icon: LockIcon,
-    name: "Authentication",
-    description: "Configure authentication modes.",
+    name: "Аутентификация",
+    description: "Способы входа в систему.",
     href: `/authentication/`,
   },
   ai: {
     Icon: BrainCog,
-    name: "Artificial intelligence",
-    description: "Configure your OpenAI creds.",
+    name: "Искусственный интеллект",
+    description: "Ключи и настройки AI-провайдера.",
     href: `/ai/`,
   },
   image: {
     Icon: Image,
-    name: "Images in Gizmo",
-    description: "Allow third-party image libraries.",
+    name: "Изображения в Gizmo",
+    description: "Сторонние библиотеки изображений.",
     href: `/image/`,
   },
 };

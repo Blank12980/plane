@@ -24,13 +24,13 @@ type Props = {
 };
 
 const ROLES = [
-  { id: "product-manager", label: "Product Manager", icon: Box },
-  { id: "engineering-manager", label: "Engineering Manager", icon: ViewsIcon },
-  { id: "designer", label: "Designer", icon: PenTool },
-  { id: "developer", label: "Developer", icon: Monitor },
-  { id: "founder-executive", label: "Founder/Executive", icon: Rocket },
-  { id: "operations-manager", label: "Operations Manager", icon: RefreshCw },
-  { id: "others", label: "Others", icon: Box },
+  { id: "product-manager", label: "Продакт-менеджер", icon: Box },
+  { id: "engineering-manager", label: "Инженерный менеджер", icon: ViewsIcon },
+  { id: "designer", label: "Дизайнер", icon: PenTool },
+  { id: "developer", label: "Разработчик", icon: Monitor },
+  { id: "founder-executive", label: "Основатель / руководитель", icon: Rocket },
+  { id: "operations-manager", label: "Операционный менеджер", icon: RefreshCw },
+  { id: "others", label: "Другое", icon: Box },
 ];
 
 const defaultValues = {
@@ -92,7 +92,7 @@ export const RoleSetupStep = observer(function RoleSetupStep({ handleStepChange 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-10">
       {/* Header */}
-      <CommonOnboardingHeader title="Какая у вас роль?" description="Let's set up Gizmo for how you work." />
+      <CommonOnboardingHeader title="Какая у вас роль?" description="Настроим Gizmo под ваш способ работы." />
       {/* Role Selection */}
       <div className="flex flex-col gap-3">
         <p className="text-body-sm-semibold text-placeholder">Выберите один вариант</p>
@@ -100,7 +100,7 @@ export const RoleSetupStep = observer(function RoleSetupStep({ handleStepChange 
           control={control}
           name="role"
           rules={{
-            required: "This field is required",
+            required: "Это поле обязательно",
           }}
           render={({ field: { value, onChange } }) => (
             <div className="flex flex-col gap-3">

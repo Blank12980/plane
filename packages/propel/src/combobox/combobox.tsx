@@ -116,7 +116,7 @@ function ComboboxOptions({
   className,
   inputClassName,
   optionsContainerClassName,
-  emptyMessage = "No results found",
+  emptyMessage = "Ничего не найдено",
   positionerClassName,
   searchQuery: controlledSearchQuery,
   onSearchQueryChange,

@@ -56,7 +56,7 @@ export function IssueLink({ activity }: { activity: IIssueActivity }) {
 
   return (
     <Tooltip
-      tooltipContent={activity?.issue_detail ? activity.issue_detail.name : "This work item has been deleted"}
+      tooltipContent={activity?.issue_detail ? activity.issue_detail.name : "Этот рабочий элемент удалён"}
       isMobile={isMobile}
     >
       {activity?.issue_detail ? (
@@ -72,7 +72,7 @@ export function IssueLink({ activity }: { activity: IIssueActivity }) {
         </a>
       ) : (
         <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap text-primary">
-          {" a work item"}{" "}
+          {" рабочий элемент"}{" "}
         </span>
       )}
     </Tooltip>
@@ -118,20 +118,20 @@ const LabelPill = observer(function LabelPill({ labelId, workspaceSlug }: { labe
 
 const inboxActivityMessage = {
   declined: {
-    showIssue: "declined work item",
-    noIssue: "declined this work item from intake.",
+    showIssue: "отклонил(а) рабочий элемент",
+    noIssue: "отклонил(а) этот рабочий элемент из входящих.",
   },
   snoozed: {
-    showIssue: "snoozed work item",
-    noIssue: "snoozed this work item.",
+    showIssue: "отложил(а) рабочий элемент",
+    noIssue: "отложил(а) этот рабочий элемент.",
   },
   accepted: {
-    showIssue: "accepted work item",
-    noIssue: "accepted this work item from intake.",
+    showIssue: "принял(а) рабочий элемент",
+    noIssue: "принял(а) этот рабочий элемент из входящих.",
   },
   markedDuplicate: {
-    showIssue: "declined work item",
-    noIssue: "declined this work item from intake by marking a duplicate work item.",
+    showIssue: "отклонил(а) рабочий элемент",
+    noIssue: "отклонил(а) этот рабочий элемент из входящих, отметив дубликат.",
   },
 };
 
@@ -146,7 +146,7 @@ const getInboxUserActivityMessage = (activity: IIssueActivity, showIssue: boolea
     case "2":
       return showIssue ? inboxActivityMessage.markedDuplicate.showIssue : inboxActivityMessage.markedDuplicate.noIssue;
     default:
-      return "updated intake work item status.";
+      return "обновил(а) статус входящего рабочего элемента.";
   }
 };
 
@@ -161,7 +161,7 @@ const activityDetails: {
       if (activity.old_value === "")
         return (
           <>
-            added a new assignee <UserLink activity={activity} />
+            добавил(а) исполнителя <UserLink activity={activity} />
             {showIssue && (
               <>
                 {" "}
@@ -173,7 +173,7 @@ const activityDetails: {
       else
         return (
           <>
-            removed the assignee <UserLink activity={activity} />
+            убрал(а) исполнителя <UserLink activity={activity} />
             {showIssue && (
               <>
                 {" "}
@@ -219,7 +219,7 @@ const activityDetails: {
       else
         return (
           <>
-            removed an attachment
+            удалил(а) вложение
             {showIssue && (
               <>
                 {" "}
@@ -234,7 +234,7 @@ const activityDetails: {
   description: {
     message: (activity, showIssue) => (
       <>
-        updated the description
+        обновил(а) описание
         {showIssue && (
           <>
             {" "}
@@ -250,7 +250,7 @@ const activityDetails: {
       if (!activity.new_value)
         return (
           <>
-            removed the estimate point
+            удалил(а) оценку
             {showIssue && (
               <>
                 {" "}
@@ -262,7 +262,7 @@ const activityDetails: {
       else
         return (
           <>
-            set the estimate point to {activity.new_value}
+            установил(а) оценку {activity.new_value}
             {showIssue && (
               <>
                 {" "}
@@ -279,19 +279,19 @@ const activityDetails: {
       if (activity.verb === "created")
         return (
           <>
-            created <IssueLink activity={activity} />
+            создал(а) <IssueLink activity={activity} />
           </>
         );
       else if (activity.verb === "converted")
         return (
           <>
-            converted <IssueLink activity={activity} /> to an epic
+            преобразовал(а) <IssueLink activity={activity} /> в эпик
           </>
         );
       else
         return (
           <>
-            deleted <IssueLink activity={activity} />
+            удалил(а) <IssueLink activity={activity} />
           </>
         );
     },
@@ -302,19 +302,19 @@ const activityDetails: {
       if (activity.verb === "created")
         return (
           <>
-            created <IssueLink activity={activity} />
+            создал(а) <IssueLink activity={activity} />
           </>
         );
       else if (activity.verb === "converted")
         return (
           <>
-            converted <IssueLink activity={activity} /> to a work item
+            преобразовал(а) <IssueLink activity={activity} /> в рабочий элемент
           </>
         );
       else
         return (
           <>
-            deleted <IssueLink activity={activity} />
+            удалил(а) <IssueLink activity={activity} />
           </>
         );
     },
@@ -325,7 +325,7 @@ const activityDetails: {
       if (activity.old_value === "")
         return (
           <span className="overflow-hidden">
-            added a new label{" "}
+            добавил(а) метку{" "}
             <span className="inline-flex items-center gap-2 rounded-full border border-strong px-2 py-0.5 text-11">
               <LabelPill labelId={activity.new_identifier ?? ""} workspaceSlug={workspaceSlug} />
               <span className="line-clamp-1 flex-shrink font-medium break-all text-primary">{activity.new_value}</span>
@@ -341,7 +341,7 @@ const activityDetails: {
       else
         return (
           <>
-            removed the label{" "}
+            убрал(а) метку{" "}
             <span className="inline-flex items-center gap-2 rounded-full border border-strong px-2 py-0.5 text-11">
               <LabelPill labelId={activity.old_identifier ?? ""} workspaceSlug={workspaceSlug} />
               <span className="line-clamp-1 flex-shrink font-medium break-all text-primary">{activity.old_value}</span>
@@ -362,7 +362,7 @@ const activityDetails: {
       if (activity.verb === "created")
         return (
           <>
-            added this{" "}
+            добавил(а){" "}
             <a
               href={`${activity.new_value}`}
               target="_blank"
@@ -382,7 +382,7 @@ const activityDetails: {
       else if (activity.verb === "updated")
         return (
           <>
-            updated the{" "}
+            обновил(а){" "}
             <a
               href={`${activity.old_value}`}
               target="_blank"
@@ -402,7 +402,7 @@ const activityDetails: {
       else
         return (
           <>
-            removed this{" "}
+            удалил(а){" "}
             <a
               href={`${activity.old_value}`}
               target="_blank"
@@ -428,8 +428,8 @@ const activityDetails: {
         return (
           <>
             <span className="flex-shrink-0">
-              added {showIssue ? <IssueLink activity={activity} /> : "this work item"}{" "}
-              <span className="whitespace-nowrap">to the cycle</span>{" "}
+              добавил(а) {showIssue ? <IssueLink activity={activity} /> : "этот рабочий элемент"}{" "}
+              <span className="whitespace-nowrap">в цикл</span>{" "}
             </span>
             <a
               href={`/${workspaceSlug}/projects/${activity.project}/cycles/${activity.new_identifier}`}
@@ -458,7 +458,7 @@ const activityDetails: {
       else
         return (
           <>
-            removed <IssueLink activity={activity} /> from the cycle{" "}
+            убрал(а) <IssueLink activity={activity} /> из цикла{" "}
             <a
               href={`/${workspaceSlug}/projects/${activity.project}/cycles/${activity.old_identifier}`}
               target="_blank"
@@ -477,7 +477,7 @@ const activityDetails: {
       if (activity.verb === "created")
         return (
           <>
-            added {showIssue ? <IssueLink activity={activity} /> : "this work item"} to the module{" "}
+            добавил(а) {showIssue ? <IssueLink activity={activity} /> : "этот рабочий элемент"} в модуль{" "}
             <a
               href={`/${workspaceSlug}/projects/${activity.project}/modules/${activity.new_identifier}`}
               target="_blank"
@@ -491,7 +491,7 @@ const activityDetails: {
       else if (activity.verb === "updated")
         return (
           <>
-            set the module to{" "}
+            установил(а) модуль{" "}
             <a
               href={`/${workspaceSlug}/projects/${activity.project}/modules/${activity.new_identifier}`}
               target="_blank"
@@ -505,7 +505,7 @@ const activityDetails: {
       else
         return (
           <>
-            removed <IssueLink activity={activity} /> from the module{" "}
+            убрал(а) <IssueLink activity={activity} /> из модуля{" "}
             <a
               href={`/${workspaceSlug}/projects/${activity.project}/modules/${activity.old_identifier}`}
               target="_blank"
@@ -522,7 +522,7 @@ const activityDetails: {
   name: {
     message: (activity, showIssue) => (
       <>
-        set the title to <span className="break-all">{activity.new_value}</span>
+        установил(а) название <span className="break-all">{activity.new_value}</span>
         {showIssue && (
           <>
             {" "}
@@ -538,7 +538,7 @@ const activityDetails: {
       if (!activity.new_value)
         return (
           <>
-            removed the parent <span className="font-medium whitespace-nowrap text-primary">{activity.old_value}</span>
+            убрал(а) родителя <span className="font-medium whitespace-nowrap text-primary">{activity.old_value}</span>
             {showIssue && (
               <>
                 {" "}
@@ -550,7 +550,7 @@ const activityDetails: {
       else
         return (
           <>
-            set the parent to <span className="font-medium whitespace-nowrap text-primary">{activity.new_value}</span>
+            установил(а) родителя <span className="font-medium whitespace-nowrap text-primary">{activity.new_value}</span>
             {showIssue && (
               <>
                 {" "}
@@ -565,7 +565,7 @@ const activityDetails: {
   priority: {
     message: (activity, showIssue) => (
       <>
-        set the priority to{" "}
+        установил(а) приоритет{" "}
         <span className="font-medium text-primary">
           {activity.new_value ? capitalizeFirstLetter(activity.new_value) : "None"}
         </span>
@@ -584,14 +584,14 @@ const activityDetails: {
       if (activity.old_value === "")
         return (
           <>
-            marked that {showIssue ? <IssueLink activity={activity} /> : "this work item"} relates to{" "}
+            отметил(а), что {showIssue ? <IssueLink activity={activity} /> : "этот рабочий элемент"} связан с{" "}
             <span className="font-medium whitespace-nowrap text-primary">{activity.new_value}</span>.
           </>
         );
       else
         return (
           <>
-            removed the relation from{" "}
+            удалил(а) связь с{" "}
             <span className="font-medium whitespace-nowrap text-primary">{activity.old_value}</span>.
           </>
         );
@@ -603,14 +603,14 @@ const activityDetails: {
       if (activity.old_value === "")
         return (
           <>
-            marked {showIssue ? <IssueLink activity={activity} /> : "this work item"} is blocking work item{" "}
+            отметил(а), что {showIssue ? <IssueLink activity={activity} /> : "этот рабочий элемент"} блокирует{" "}
             <span className="font-medium whitespace-nowrap text-primary">{activity.new_value}</span>.
           </>
         );
       else
         return (
           <>
-            removed the blocking work item{" "}
+            убрал(а) блокирующий рабочий элемент{" "}
             <span className="font-medium whitespace-nowrap text-primary">{activity.old_value}</span>.
           </>
         );
@@ -622,14 +622,14 @@ const activityDetails: {
       if (activity.old_value === "")
         return (
           <>
-            marked {showIssue ? <IssueLink activity={activity} /> : "this work item"} is being blocked by{" "}
+            отметил(а), что {showIssue ? <IssueLink activity={activity} /> : "этот рабочий элемент"} заблокирован{" "}
             <span className="font-medium whitespace-nowrap text-primary">{activity.new_value}</span>.
           </>
         );
       else
         return (
           <>
-            removed {showIssue ? <IssueLink activity={activity} /> : "this work item"} being blocked by work item{" "}
+            убрал(а) блокировку {showIssue ? <IssueLink activity={activity} /> : "этого рабочего элемента"} со стороны{" "}
             <span className="font-medium whitespace-nowrap text-primary">{activity.old_value}</span>.
           </>
         );
@@ -641,14 +641,14 @@ const activityDetails: {
       if (activity.old_value === "")
         return (
           <>
-            marked {showIssue ? <IssueLink activity={activity} /> : "this work item"} as duplicate of{" "}
+            отметил(а) {showIssue ? <IssueLink activity={activity} /> : "этот рабочий элемент"} как дубликат{" "}
             <span className="font-medium whitespace-nowrap text-primary">{activity.new_value}</span>.
           </>
         );
       else
         return (
           <>
-            removed {showIssue ? <IssueLink activity={activity} /> : "this work item"} as a duplicate of{" "}
+            убрал(а) {showIssue ? <IssueLink activity={activity} /> : "этот рабочий элемент"} из дубликатов{" "}
             <span className="font-medium whitespace-nowrap text-primary">{activity.old_value}</span>.
           </>
         );
@@ -658,7 +658,7 @@ const activityDetails: {
   state: {
     message: (activity, showIssue) => (
       <>
-        set the state to <span className="font-medium break-all text-primary">{activity.new_value}</span>
+        установил(а) статус <span className="font-medium break-all text-primary">{activity.new_value}</span>
         {showIssue && (
           <>
             {" "}
@@ -674,7 +674,7 @@ const activityDetails: {
       if (!activity.new_value)
         return (
           <>
-            removed the start date
+            удалил(а) дату начала
             {showIssue && (
               <>
                 {" "}
@@ -686,7 +686,7 @@ const activityDetails: {
       else
         return (
           <>
-            set the start date to{" "}
+            установил(а) дату начала{" "}
             <span className="font-medium whitespace-nowrap text-primary">
               {renderFormattedDate(activity.new_value)}
             </span>
@@ -706,7 +706,7 @@ const activityDetails: {
       if (!activity.new_value)
         return (
           <>
-            removed the due date
+            удалил(а) срок
             {showIssue && (
               <>
                 {" "}
@@ -718,7 +718,7 @@ const activityDetails: {
       else
         return (
           <>
-            set the due date to{" "}
+            установил(а) срок{" "}
             <span className="font-medium whitespace-nowrap text-primary">
               {renderFormattedDate(activity.new_value)}
             </span>
@@ -742,7 +742,7 @@ const activityDetails: {
             <IssueLink activity={activity} />
           </>
         )}
-        {activity.verb === "2" && ` from intake by marking a duplicate work item.`}
+        {activity.verb === "2" && ` из входящих, отметив дубликат.`}
       </>
     ),
     icon: <IntakeIcon className="size-3 text-secondary" aria-hidden="true" />,

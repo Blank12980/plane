@@ -343,7 +343,7 @@ export const InviteTeamStep = observer(function InviteTeamStep(props: Props) {
     >
       <CommonOnboardingHeader
         title="Пригласите коллег"
-        description="Work in Gizmo happens best with your team. Invite them now to use Gizmo to its potential."
+        description="В Gizmo лучше работать командой. Пригласите коллег, чтобы раскрыть весь потенциал."
       />
       <div className="w-full py-4 text-13">
         <div className="group relative mx-8 grid grid-cols-10 gap-4 py-2">

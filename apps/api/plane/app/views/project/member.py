@@ -19,6 +19,7 @@ from plane.app.serializers import (
 from plane.app.permissions import WorkspaceUserPermission
 
 from plane.db.models import Project, ProjectMember, ProjectUserProperty, WorkspaceMember
+from plane.license.workspace_access import promote_explicit_workspace_membership
 from plane.bgtasks.project_add_user_email_task import project_add_user_email
 from plane.utils.host import base_host
 from plane.app.permissions.base import allow_permission, ROLE
@@ -90,10 +91,16 @@ class ProjectMemberViewSet(BaseViewSet):
         ):
             project_member.role = member_roles[str(project_member.member_id)]
             project_member.is_active = True
+            project_member.is_instance_admin_access = False
+            project_member.instance_admin_previous_role = None
             bulk_project_members.append(project_member)
 
         # Update the roles of the existing members
-        ProjectMember.objects.bulk_update(bulk_project_members, ["is_active", "role"], batch_size=100)
+        ProjectMember.objects.bulk_update(
+            bulk_project_members,
+            ["is_active", "role", "is_instance_admin_access", "instance_admin_previous_role"],
+            batch_size=100,
+        )
 
         # Get the minimum sort_order for each member in the workspace
         member_sort_orders = (
@@ -140,6 +147,20 @@ class ProjectMemberViewSet(BaseViewSet):
             project_id=project_id,
             member_id__in=[member.get("member_id") for member in members],
         )
+        for added_member_id in member_roles:
+            workspace_member = WorkspaceMember.objects.filter(
+                workspace__slug=slug,
+                member_id=added_member_id,
+                is_active=True,
+                is_instance_admin_access=True,
+            ).first()
+            if workspace_member is not None:
+                promote_explicit_workspace_membership(
+                    workspace_member.member,
+                    workspace_member.workspace,
+                    role=workspace_member.role,
+                    include_projects=False,
+                )
         # Send emails to notify the users
         [
             project_add_user_email.delay(
@@ -162,8 +183,10 @@ class ProjectMemberViewSet(BaseViewSet):
             workspace__slug=slug,
             member__is_bot=False,
             is_active=True,
+            is_instance_admin_access=False,
             member__member_workspace__workspace__slug=slug,
             member__member_workspace__is_active=True,
+            member__member_workspace__is_instance_admin_access=False,
         ).select_related("project", "member", "workspace")
 
         serializer = ProjectMemberRoleSerializer(project_members, fields=("id", "member", "role"), many=True)
@@ -185,6 +208,7 @@ class ProjectMemberViewSet(BaseViewSet):
                 workspace__slug=slug,
                 member__is_bot=False,
                 is_active=True,
+                is_instance_admin_access=False,
             )
             .select_related("project", "member", "workspace")
             .first()

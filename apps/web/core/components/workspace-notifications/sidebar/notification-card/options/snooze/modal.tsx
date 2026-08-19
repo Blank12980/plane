@@ -205,7 +205,7 @@ export function NotificationSnoozeModal(props: TNotificationSnoozeModal) {
                       </CustomSelect.Option>
                     ))
                   ) : (
-                    <p className="p-3 text-center text-secondary">No available time for this date.</p>
+                    <p className="p-3 text-center text-secondary">Нет доступного времени на эту дату.</p>
                   )}
                 </CustomSelect>
               )}

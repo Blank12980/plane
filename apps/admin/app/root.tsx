@@ -95,7 +95,7 @@ export function HydrateFallback() {
 export function ErrorBoundary({ error: _error }: Route.ErrorBoundaryProps) {
   return (
     <div>
-      <p>Something went wrong.</p>
+      <p>Что-то пошло не так.</p>
     </div>
   );
 }

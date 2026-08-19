@@ -15,7 +15,7 @@ from plane.license.api.permissions import InstanceAdminPermission
 from plane.db.models import User, Workspace, WorkspaceMember, Project, ProjectMember
 from plane.app.serializers import WorkspaceMemberAdminSerializer
 from plane.license.api.serializers import WorkspaceSerializer
-from plane.license.models import InstanceAdmin
+from plane.license.workspace_access import promote_explicit_workspace_membership
 from plane.utils.constants import RESTRICTED_WORKSPACE_SLUGS
 
 
@@ -181,44 +181,19 @@ class InstanceWorkspaceMemberEndpoint(BaseAPIView):
                 {"error": "An active registered user with this email was not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        if InstanceAdmin.objects.filter(user=user).exists():
-            return Response(
-                {"error": "Instance administrators already have access to every workspace"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         member = WorkspaceMember.objects.filter(
             workspace=workspace,
             member=user,
             deleted_at__isnull=True,
         ).first()
-        if member is not None and member.is_active:
+        if member is not None and member.is_active and not member.is_instance_admin_access:
             return Response(
                 {"error": "This user is already a workspace member"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if member is None:
-            member = WorkspaceMember.objects.create(
-                workspace=workspace,
-                member=user,
-                role=role,
-            )
-        else:
-            member.role = role
-            member.is_active = True
-            member.is_instance_admin_access = False
-            member.instance_admin_previous_role = None
-            member.save(
-                update_fields=[
-                    "role",
-                    "is_active",
-                    "is_instance_admin_access",
-                    "instance_admin_previous_role",
-                    "updated_at",
-                ]
-            )
-
+        member = promote_explicit_workspace_membership(user, workspace, role=role)
         return Response(WorkspaceMemberAdminSerializer(member).data, status=status.HTTP_201_CREATED)
 
     def patch(self, request, workspace_id, pk):

@@ -57,27 +57,27 @@ export type PasswordCriteria = {
 export const getPasswordCriteria = (password: string): PasswordCriteria[] => [
   {
     key: "length",
-    label: "Min 8 characters",
+    label: "Минимум 8 символов",
     isValid: password.length >= 8,
   },
   {
     key: "uppercase",
-    label: "Min 1 upper-case letter",
+    label: "Минимум 1 заглавная буква",
     isValid: /[A-Z]/.test(password),
   },
   {
     key: "lowercase",
-    label: "Min 1 lower-case letter",
+    label: "Минимум 1 строчная буква",
     isValid: /[a-z]/.test(password),
   },
   {
     key: "number",
-    label: "Min 1 number",
+    label: "Минимум 1 цифра",
     isValid: /[0-9]/.test(password),
   },
   {
     key: "special",
-    label: "Min 1 special character",
+    label: "Минимум 1 спецсимвол",
     isValid: /[!@#$%^&*()\-_+=\[\]{}|;:'",.<>?/]/.test(password),
   },
 ];
@@ -88,217 +88,217 @@ const errorCodeMessages: {
 } = {
   // global
   [EAuthErrorCodes.INSTANCE_NOT_CONFIGURED]: {
-    title: `Instance not configured`,
-    message: () => `Instance not configured. Please contact your administrator.`,
+    title: `Экземпляр не настроен`,
+    message: () => `Экземпляр не настроен. Обратитесь к администратору.`,
   },
   [EAuthErrorCodes.SIGNUP_DISABLED]: {
-    title: `Sign up disabled`,
-    message: () => `Sign up disabled. Please contact your administrator.`,
+    title: `Регистрация отключена`,
+    message: () => `Регистрация отключена. Обратитесь к администратору.`,
   },
   [EAuthErrorCodes.INVALID_PASSWORD]: {
-    title: `Invalid password`,
-    message: () => `Invalid password. Please try again.`,
+    title: `Неверный пароль`,
+    message: () => `Неверный пароль. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.PASSWORD_TOO_WEAK]: {
-    title: `Password too weak`,
-    message: () => `Please use a stronger password.`,
+    title: `Пароль слишком слабый`,
+    message: () => `Используйте более надёжный пароль.`,
   },
   [EAuthErrorCodes.SMTP_NOT_CONFIGURED]: {
-    title: `SMTP not configured`,
-    message: () => `SMTP not configured. Please contact your administrator.`,
+    title: `SMTP не настроен`,
+    message: () => `SMTP не настроен. Обратитесь к администратору.`,
   },
   // email check in both sign up and sign in
   [EAuthErrorCodes.INVALID_EMAIL]: {
-    title: `Invalid email`,
-    message: () => `Invalid email. Please try again.`,
+    title: `Неверный email`,
+    message: () => `Неверный email. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.EMAIL_REQUIRED]: {
-    title: `Email required`,
-    message: () => `Email required. Please try again.`,
+    title: `Требуется email`,
+    message: () => `Требуется email. Попробуйте ещё раз.`,
   },
   // sign up
   [EAuthErrorCodes.USER_ALREADY_EXIST]: {
-    title: `User already exists`,
-    message: () => `Your account is already registered. Sign in now.`,
+    title: `Пользователь уже существует`,
+    message: () => `Аккаунт уже зарегистрирован. Войдите.`,
   },
   [EAuthErrorCodes.REQUIRED_EMAIL_PASSWORD_SIGN_UP]: {
-    title: `Email and password required`,
-    message: () => `Email and password required. Please try again.`,
+    title: `Требуются email и пароль`,
+    message: () => `Требуются email и пароль. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.AUTHENTICATION_FAILED_SIGN_UP]: {
-    title: `Authentication failed`,
-    message: () => `Authentication failed. Please try again.`,
+    title: `Ошибка аутентификации`,
+    message: () => `Ошибка аутентификации. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.INVALID_EMAIL_SIGN_UP]: {
-    title: `Invalid email`,
-    message: () => `Invalid email. Please try again.`,
+    title: `Неверный email`,
+    message: () => `Неверный email. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.MAGIC_SIGN_UP_EMAIL_CODE_REQUIRED]: {
-    title: `Email and code required`,
-    message: () => `Email and code required. Please try again.`,
+    title: `Требуются email и код`,
+    message: () => `Требуются email и код. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.INVALID_EMAIL_MAGIC_SIGN_UP]: {
-    title: `Invalid email`,
-    message: () => `Invalid email. Please try again.`,
+    title: `Неверный email`,
+    message: () => `Неверный email. Попробуйте ещё раз.`,
   },
   // sign in
   [EAuthErrorCodes.USER_ACCOUNT_DEACTIVATED]: {
-    title: `User account deactivated`,
-    message: () => `User account deactivated. Please contact administrator.`,
+    title: `Аккаунт деактивирован`,
+    message: () => `Аккаунт деактивирован. Обратитесь к администратору.`,
   },
   [EAuthErrorCodes.USER_DOES_NOT_EXIST]: {
-    title: `User does not exist`,
-    message: () => `No account found. Create one to get started.`,
+    title: `Пользователь не найден`,
+    message: () => `Аккаунт не найден. Создайте его, чтобы начать.`,
   },
   [EAuthErrorCodes.REQUIRED_EMAIL_PASSWORD_SIGN_IN]: {
-    title: `Email and password required`,
-    message: () => `Email and password required. Please try again.`,
+    title: `Требуются email и пароль`,
+    message: () => `Требуются email и пароль. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.AUTHENTICATION_FAILED_SIGN_IN]: {
-    title: `Authentication failed`,
-    message: () => `Authentication failed. Please try again.`,
+    title: `Ошибка аутентификации`,
+    message: () => `Ошибка аутентификации. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.INVALID_EMAIL_SIGN_IN]: {
-    title: `Invalid email`,
-    message: () => `Invalid email. Please try again.`,
+    title: `Неверный email`,
+    message: () => `Неверный email. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.MAGIC_SIGN_IN_EMAIL_CODE_REQUIRED]: {
-    title: `Email and code required`,
-    message: () => `Email and code required. Please try again.`,
+    title: `Требуются email и код`,
+    message: () => `Требуются email и код. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.INVALID_EMAIL_MAGIC_SIGN_IN]: {
-    title: `Invalid email`,
-    message: () => `Invalid email. Please try again.`,
+    title: `Неверный email`,
+    message: () => `Неверный email. Попробуйте ещё раз.`,
   },
   // Both Sign in and Sign up
   [EAuthErrorCodes.INVALID_MAGIC_CODE_SIGN_IN]: {
-    title: `Authentication failed`,
-    message: () => `Invalid magic code. Please try again.`,
+    title: `Ошибка аутентификации`,
+    message: () => `Неверный код. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.INVALID_MAGIC_CODE_SIGN_UP]: {
-    title: `Authentication failed`,
-    message: () => `Invalid magic code. Please try again.`,
+    title: `Ошибка аутентификации`,
+    message: () => `Неверный код. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.EXPIRED_MAGIC_CODE_SIGN_IN]: {
-    title: `Expired magic code`,
-    message: () => `Expired magic code. Please try again.`,
+    title: `Код истёк`,
+    message: () => `Код истёк. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.EXPIRED_MAGIC_CODE_SIGN_UP]: {
-    title: `Expired magic code`,
-    message: () => `Expired magic code. Please try again.`,
+    title: `Код истёк`,
+    message: () => `Код истёк. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.EMAIL_CODE_ATTEMPT_EXHAUSTED_SIGN_IN]: {
-    title: `Expired magic code`,
-    message: () => `Expired magic code. Please try again.`,
+    title: `Код истёк`,
+    message: () => `Код истёк. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.EMAIL_CODE_ATTEMPT_EXHAUSTED_SIGN_UP]: {
-    title: `Expired magic code`,
-    message: () => `Expired magic code. Please try again.`,
+    title: `Код истёк`,
+    message: () => `Код истёк. Попробуйте ещё раз.`,
   },
   // Oauth
   [EAuthErrorCodes.OAUTH_NOT_CONFIGURED]: {
-    title: `OAuth not configured`,
-    message: () => `OAuth not configured. Please contact your administrator.`,
+    title: `OAuth не настроен`,
+    message: () => `OAuth не настроен. Обратитесь к администратору.`,
   },
   [EAuthErrorCodes.GOOGLE_NOT_CONFIGURED]: {
-    title: `Google not configured`,
-    message: () => `Google not configured. Please contact your administrator.`,
+    title: `Google не настроен`,
+    message: () => `Google не настроен. Обратитесь к администратору.`,
   },
   [EAuthErrorCodes.GITHUB_NOT_CONFIGURED]: {
-    title: `GitHub not configured`,
-    message: () => `GitHub not configured. Please contact your administrator.`,
+    title: `GitHub не настроен`,
+    message: () => `GitHub не настроен. Обратитесь к администратору.`,
   },
   [EAuthErrorCodes.GITLAB_NOT_CONFIGURED]: {
-    title: `GitLab not configured`,
-    message: () => `GitLab not configured. Please contact your administrator.`,
+    title: `GitLab не настроен`,
+    message: () => `GitLab не настроен. Обратитесь к администратору.`,
   },
   [EAuthErrorCodes.GOOGLE_OAUTH_PROVIDER_ERROR]: {
-    title: `Google OAuth provider error`,
-    message: () => `Google OAuth provider error. Please try again.`,
+    title: `Ошибка провайдера Google`,
+    message: () => `Ошибка провайдера Google. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.GITHUB_OAUTH_PROVIDER_ERROR]: {
-    title: `GitHub OAuth provider error`,
-    message: () => `GitHub OAuth provider error. Please try again.`,
+    title: `Ошибка провайдера GitHub`,
+    message: () => `Ошибка провайдера GitHub. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.GITLAB_OAUTH_PROVIDER_ERROR]: {
-    title: `GitLab OAuth provider error`,
-    message: () => `GitLab OAuth provider error. Please try again.`,
+    title: `Ошибка провайдера GitLab`,
+    message: () => `Ошибка провайдера GitLab. Попробуйте ещё раз.`,
   },
   // Reset Password
   [EAuthErrorCodes.INVALID_PASSWORD_TOKEN]: {
-    title: `Invalid password token`,
-    message: () => `Invalid password token. Please try again.`,
+    title: `Недействительный токен пароля`,
+    message: () => `Недействительный токен пароля. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.EXPIRED_PASSWORD_TOKEN]: {
-    title: `Expired password token`,
-    message: () => `Expired password token. Please try again.`,
+    title: `Токен пароля истёк`,
+    message: () => `Токен пароля истёк. Попробуйте ещё раз.`,
   },
   // Change password
   [EAuthErrorCodes.MISSING_PASSWORD]: {
-    title: `Password required`,
-    message: () => `Password required. Please try again.`,
+    title: `Требуется пароль`,
+    message: () => `Требуется пароль. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.INCORRECT_OLD_PASSWORD]: {
-    title: `Incorrect old password`,
-    message: () => `Incorrect old password. Please try again.`,
+    title: `Неверный текущий пароль`,
+    message: () => `Неверный текущий пароль. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.INVALID_NEW_PASSWORD]: {
-    title: `Invalid new password`,
-    message: () => `Invalid new password. Please try again.`,
+    title: `Неверный новый пароль`,
+    message: () => `Неверный новый пароль. Попробуйте ещё раз.`,
   },
   // set password
   [EAuthErrorCodes.PASSWORD_ALREADY_SET]: {
-    title: `Password already set`,
-    message: () => `Password already set. Please try again.`,
+    title: `Пароль уже задан`,
+    message: () => `Пароль уже задан. Попробуйте ещё раз.`,
   },
   // admin
   [EAuthErrorCodes.ADMIN_ALREADY_EXIST]: {
-    title: `Admin already exists`,
-    message: () => `Admin already exists. Please try again.`,
+    title: `Администратор уже существует`,
+    message: () => `Администратор уже существует. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.REQUIRED_ADMIN_EMAIL_PASSWORD_FIRST_NAME]: {
-    title: `Email, password and first name required`,
-    message: () => `Email, password and first name required. Please try again.`,
+    title: `Требуются email, пароль и имя`,
+    message: () => `Требуются email, пароль и имя. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.INVALID_ADMIN_EMAIL]: {
-    title: `Invalid admin email`,
-    message: () => `Invalid admin email. Please try again.`,
+    title: `Неверный email администратора`,
+    message: () => `Неверный email администратора. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.INVALID_ADMIN_PASSWORD]: {
-    title: `Invalid admin password`,
-    message: () => `Invalid admin password. Please try again.`,
+    title: `Неверный пароль администратора`,
+    message: () => `Неверный пароль администратора. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.REQUIRED_ADMIN_EMAIL_PASSWORD]: {
-    title: `Email and password required`,
-    message: () => `Email and password required. Please try again.`,
+    title: `Требуются email и пароль`,
+    message: () => `Требуются email и пароль. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.ADMIN_AUTHENTICATION_FAILED]: {
-    title: `Authentication failed`,
-    message: () => `Authentication failed. Please try again.`,
+    title: `Ошибка аутентификации`,
+    message: () => `Ошибка аутентификации. Попробуйте ещё раз.`,
   },
   [EAuthErrorCodes.ADMIN_USER_ALREADY_EXIST]: {
-    title: `Admin user already exists`,
-    message: () => `Admin user already exists. Sign in now.`,
+    title: `Администратор уже существует`,
+    message: () => `Администратор уже существует. Войдите.`,
   },
   [EAuthErrorCodes.ADMIN_USER_DOES_NOT_EXIST]: {
-    title: `Admin user does not exist`,
-    message: () => `Admin user does not exist. Sign in now.`,
+    title: `Администратор не найден`,
+    message: () => `Администратор не найден. Войдите.`,
   },
   [EAuthErrorCodes.MAGIC_LINK_LOGIN_DISABLED]: {
-    title: `Magic link login disabled`,
-    message: () => `Magic link login is disabled. Please use password to login.`,
+    title: `Вход по ссылке отключён`,
+    message: () => `Вход по ссылке отключён. Используйте пароль.`,
   },
   [EAuthErrorCodes.PASSWORD_LOGIN_DISABLED]: {
-    title: `Password login disabled`,
-    message: () => `Password login is disabled. Please use magic link to login.`,
+    title: `Вход по паролю отключён`,
+    message: () => `Вход по паролю отключён. Используйте ссылку из письма.`,
   },
   [EAuthErrorCodes.ADMIN_USER_DEACTIVATED]: {
-    title: `Admin user deactivated`,
-    message: () => `Admin user account has been deactivated. Please contact administrator.`,
+    title: `Администратор деактивирован`,
+    message: () => `Аккаунт администратора деактивирован. Обратитесь к администратору.`,
   },
   [EAuthErrorCodes.RATE_LIMIT_EXCEEDED]: {
-    title: `Rate limit exceeded`,
-    message: () => `Too many requests. Please try again later.`,
+    title: `Слишком много запросов`,
+    message: () => `Слишком много запросов. Попробуйте позже.`,
   },
 };
 

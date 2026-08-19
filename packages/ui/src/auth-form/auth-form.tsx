@@ -117,17 +117,17 @@ export function AuthForm({
 
   const getSubmitButtonText = () => {
     if (submitButtonText) return submitButtonText;
-    return mode === "sign-in" ? "Sign In" : "Create Account";
+    return mode === "sign-in" ? "Войти" : "Создать аккаунт";
   };
 
   const getAlternateModeText = () => {
     if (alternateModeText) return alternateModeText;
-    return mode === "sign-in" ? "Don't have an account?" : "Already have an account?";
+    return mode === "sign-in" ? "Нет аккаунта?" : "Уже есть аккаунт?";
   };
 
   const getAlternateModeButtonText = () => {
     if (alternateModeButtonText) return alternateModeButtonText;
-    return mode === "sign-in" ? "Sign Up" : "Sign In";
+    return mode === "sign-in" ? "Зарегистрироваться" : "Войти";
   };
 
   return (
@@ -151,12 +151,12 @@ export function AuthForm({
       <AuthPasswordInput
         id="password"
         name="password"
-        label={mode === "sign-in" ? "Password" : "Set a password"}
+        label={mode === "sign-in" ? "Пароль" : "Задайте пароль"}
         value={formData.password}
         onChange={handleInputChange("password")}
         onPasswordChange={handlePasswordChange}
         onPasswordStrengthChange={handlePasswordStrengthChange}
-        placeholder="Enter password"
+        placeholder="Введите пароль"
         error={passwordError}
         showPasswordStrength={showPasswordStrength && mode === "sign-up"}
         disabled={disabled}

@@ -65,19 +65,19 @@ export const SLUG_REGEX = /^[\p{L}\p{N}_-]+$/u;
  */
 export const validatePersonName = (name: string): boolean | string => {
   if (!name || name.trim() === "") {
-    return "Name is required";
+    return "Имя обязательно";
   }
 
   if (name.length > 50) {
-    return "Name must be 50 characters or less";
+    return "Имя должно быть не длиннее 50 символов";
   }
 
   if (hasInjectionRiskChars(name)) {
-    return "Names cannot contain special characters like < > ' \" { } [ ] * ^ ! # %";
+    return "Имя не может содержать спецсимволы вроде < > ' \" { } [ ] * ^ ! # %";
   }
 
   if (!PERSON_NAME_REGEX.test(name)) {
-    return "Names can only contain letters, spaces, hyphens, and apostrophes";
+    return "Имя может содержать только буквы, пробелы, дефисы и апострофы";
   }
 
   return true;
@@ -99,15 +99,15 @@ export const validateDisplayName = (displayName: string): boolean | string => {
   }
 
   if (displayName.length > 50) {
-    return "Display name must be 50 characters or less";
+    return "Отображаемое имя должно быть не длиннее 50 символов";
   }
 
   if (hasInjectionRiskChars(displayName)) {
-    return "Display name cannot contain special characters like < > ' \" { } [ ] * ^ ! # %";
+    return "Отображаемое имя не может содержать спецсимволы вроде < > ' \" { } [ ] * ^ ! # %";
   }
 
   if (!DISPLAY_NAME_REGEX.test(displayName)) {
-    return "Display name can only contain letters, numbers, periods, hyphens, and underscores";
+    return "Отображаемое имя может содержать только буквы, цифры, точки, дефисы и подчёркивания";
   }
 
   return true;
@@ -125,19 +125,19 @@ export const validateDisplayName = (displayName: string): boolean | string => {
  */
 export const validateCompanyName = (companyName: string, required: boolean = false): boolean | string => {
   if (!companyName || companyName.trim() === "") {
-    return required ? "Company name is required" : true;
+    return required ? "Название компании обязательно" : true;
   }
 
   if (companyName.length > 80) {
-    return "Company name must be 80 characters or less";
+    return "Название компании должно быть не длиннее 80 символов";
   }
 
   if (hasInjectionRiskChars(companyName)) {
-    return "Company name cannot contain special characters like < > ' \" { } [ ] * ^ ! # %";
+    return "Название компании не может содержать спецсимволы вроде < > ' \" { } [ ] * ^ ! # %";
   }
 
   if (!COMPANY_NAME_REGEX.test(companyName)) {
-    return "Company name can only contain letters, numbers, spaces, hyphens, and underscores";
+    return "Название компании может содержать только буквы, цифры, пробелы, дефисы и подчёркивания";
   }
 
   return true;
@@ -155,19 +155,19 @@ export const validateCompanyName = (companyName: string, required: boolean = fal
  */
 export const validateWorkspaceName = (workspaceName: string, required: boolean = false): boolean | string => {
   if (!workspaceName || workspaceName.trim() === "") {
-    return required ? "Workspace name is required" : true;
+    return required ? "Название рабочего пространства обязательно" : true;
   }
 
   if (workspaceName.length > 80) {
-    return "Workspace name must be 80 characters or less";
+    return "Название рабочего пространства должно быть не длиннее 80 символов";
   }
 
   if (hasInjectionRiskChars(workspaceName)) {
-    return "Workspace name cannot contain special characters like < > ' \" { } [ ] * ^ ! # %";
+    return "Название рабочего пространства не может содержать спецсимволы вроде < > ' \" { } [ ] * ^ ! # %";
   }
 
   if (!COMPANY_NAME_REGEX.test(workspaceName)) {
-    return "Workspace name can only contain letters, numbers, spaces, hyphens, and underscores";
+    return "Название рабочего пространства может содержать только буквы, цифры, пробелы, дефисы и подчёркивания";
   }
 
   return true;
@@ -184,19 +184,19 @@ export const validateWorkspaceName = (workspaceName: string, required: boolean =
  */
 export const validateSlug = (slug: string): boolean | string => {
   if (!slug || slug.trim() === "") {
-    return "Slug is required";
+    return "Идентификатор обязателен";
   }
 
   if (slug.length > 48) {
-    return "Slug must be 48 characters or less";
+    return "Идентификатор должен быть не длиннее 48 символов";
   }
 
   if (hasInjectionRiskChars(slug)) {
-    return "Slug cannot contain special characters like < > ' \" { } [ ] * ^ ! # %";
+    return "Идентификатор не может содержать спецсимволы вроде < > ' \" { } [ ] * ^ ! # %";
   }
 
   if (!SLUG_REGEX.test(slug)) {
-    return "Slug can only contain letters, numbers, hyphens, and underscores";
+    return "Идентификатор может содержать только буквы, цифры, дефисы и подчёркивания";
   }
 
   return true;
