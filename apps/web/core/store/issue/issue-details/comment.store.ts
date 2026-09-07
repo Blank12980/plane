@@ -7,9 +7,15 @@
 import { pull, concat, update, uniq, set } from "lodash-es";
 import { action, makeObservable, observable, runInAction } from "mobx";
 // Gizmo Imports
-import type { TIssueComment, TIssueCommentMap, TIssueCommentIdMap, TIssueServiceType } from "@plane/types";
+import type {
+  TCommentAttachment,
+  TIssueComment,
+  TIssueCommentMap,
+  TIssueCommentIdMap,
+  TIssueServiceType,
+} from "@plane/types";
 // services
-import { IssueCommentService } from "@/services/issue";
+import { IssueCommentAttachmentService, IssueCommentService } from "@/services/issue";
 // types
 import type { IIssueDetail } from "./root.store";
 
@@ -36,6 +42,25 @@ export interface IIssueCommentStoreActions {
     data: Partial<TIssueComment>
   ) => Promise<any>;
   removeComment: (workspaceSlug: string, projectId: string, issueId: string, commentId: string) => Promise<any>;
+  uploadCommentAttachment: (
+    workspaceSlug: string,
+    projectId: string,
+    file: File,
+    commentId?: string,
+    onProgress?: (progress: number) => void
+  ) => Promise<TCommentAttachment>;
+  removeCommentAttachment: (
+    workspaceSlug: string,
+    projectId: string,
+    attachmentId: string,
+    commentId?: string
+  ) => Promise<void>;
+  bindCommentAttachments: (
+    workspaceSlug: string,
+    projectId: string,
+    commentId: string,
+    attachments: TCommentAttachment[]
+  ) => Promise<void>;
 }
 
 export interface IIssueCommentStore extends IIssueCommentStoreActions {
@@ -46,6 +71,7 @@ export interface IIssueCommentStore extends IIssueCommentStoreActions {
   // helper methods
   getCommentsByIssueId: (issueId: string) => string[] | undefined;
   getCommentById: (activityId: string) => TIssueComment | undefined;
+  getCommentAttachmentsByCommentId: (commentId: string) => TCommentAttachment[];
 }
 
 export class IssueCommentStore implements IIssueCommentStore {
@@ -58,6 +84,7 @@ export class IssueCommentStore implements IIssueCommentStore {
   rootIssueDetail: IIssueDetail;
   // services
   issueCommentService;
+  issueCommentAttachmentService;
 
   constructor(rootStore: IIssueDetail, serviceType: TIssueServiceType) {
     makeObservable(this, {
@@ -70,12 +97,16 @@ export class IssueCommentStore implements IIssueCommentStore {
       createComment: action,
       updateComment: action,
       removeComment: action,
+      uploadCommentAttachment: action,
+      removeCommentAttachment: action,
+      bindCommentAttachments: action,
     });
     // root store
     this.serviceType = serviceType;
     this.rootIssueDetail = rootStore;
     // services
     this.issueCommentService = new IssueCommentService(serviceType);
+    this.issueCommentAttachmentService = new IssueCommentAttachmentService();
   }
 
   // helper methods
@@ -88,6 +119,8 @@ export class IssueCommentStore implements IIssueCommentStore {
     if (!commentId) return undefined;
     return this.commentMap[commentId] ?? undefined;
   };
+
+  getCommentAttachmentsByCommentId = (commentId: string) => this.commentMap[commentId]?.attachment_details ?? [];
 
   fetchComments = async (
     workspaceSlug: string,
@@ -114,7 +147,7 @@ export class IssueCommentStore implements IIssueCommentStore {
       });
       comments.forEach((comment) => {
         this.rootIssueDetail.commentReaction.applyCommentReactions(comment.id, comment?.comment_reactions || []);
-        set(this.commentMap, comment.id, comment);
+        set(this.commentMap, comment.id, { ...comment, attachment_details: comment.attachment_details ?? [] });
       });
       this.loader = undefined;
     });
@@ -130,7 +163,7 @@ export class IssueCommentStore implements IIssueCommentStore {
         if (!_commentIds) return [response.id];
         return uniq(concat(_commentIds, [response.id]));
       });
-      set(this.commentMap, response.id, response);
+      set(this.commentMap, response.id, { ...response, attachment_details: response.attachment_details ?? [] });
     });
 
     return response;
@@ -179,5 +212,78 @@ export class IssueCommentStore implements IIssueCommentStore {
     });
 
     return response;
+  };
+
+  /**
+   * Uploads a file to a comment. `commentId` is undefined while a new comment is
+   * being composed - the asset stays unbound until `bindCommentAttachments` runs.
+   */
+  uploadCommentAttachment = async (
+    workspaceSlug: string,
+    projectId: string,
+    file: File,
+    commentId?: string,
+    onProgress?: (progress: number) => void
+  ) => {
+    const attachment = await this.issueCommentAttachmentService.uploadCommentAttachment(
+      workspaceSlug,
+      projectId,
+      file,
+      commentId,
+      (progressEvent) => onProgress?.(Math.round((progressEvent.progress ?? 0) * 100))
+    );
+
+    if (commentId && this.commentMap[commentId]) {
+      runInAction(() => {
+        update(this.commentMap[commentId], "attachment_details", (attachments: TCommentAttachment[] = []) =>
+          uniq(concat(attachments, [attachment]))
+        );
+      });
+    }
+
+    return attachment;
+  };
+
+  removeCommentAttachment = async (
+    workspaceSlug: string,
+    projectId: string,
+    attachmentId: string,
+    commentId?: string
+  ) => {
+    await this.issueCommentAttachmentService.deleteCommentAttachment(workspaceSlug, projectId, attachmentId);
+
+    if (commentId && this.commentMap[commentId]) {
+      runInAction(() => {
+        set(
+          this.commentMap[commentId],
+          "attachment_details",
+          this.getCommentAttachmentsByCommentId(commentId).filter((attachment) => attachment.id !== attachmentId)
+        );
+      });
+    }
+  };
+
+  bindCommentAttachments = async (
+    workspaceSlug: string,
+    projectId: string,
+    commentId: string,
+    attachments: TCommentAttachment[]
+  ) => {
+    if (attachments.length === 0) return;
+
+    await this.issueCommentAttachmentService.bindCommentAttachments(
+      workspaceSlug,
+      projectId,
+      commentId,
+      attachments.map((attachment) => attachment.id)
+    );
+
+    if (this.commentMap[commentId]) {
+      runInAction(() => {
+        update(this.commentMap[commentId], "attachment_details", (existing: TCommentAttachment[] = []) =>
+          uniq(concat(existing, attachments))
+        );
+      });
+    }
   };
 }

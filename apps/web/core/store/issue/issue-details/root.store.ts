@@ -7,6 +7,7 @@
 import { action, computed, makeObservable, observable } from "mobx";
 // types
 import type {
+  TCommentAttachment,
   TIssue,
   TIssueAttachment,
   TIssueComment,
@@ -402,6 +403,27 @@ export abstract class IssueDetail implements IIssueDetail {
   ) => this.comment.updateComment(workspaceSlug, projectId, issueId, commentId, data);
   removeComment = async (workspaceSlug: string, projectId: string, issueId: string, commentId: string) =>
     this.comment.removeComment(workspaceSlug, projectId, issueId, commentId);
+
+  // comment attachments
+  uploadCommentAttachment = async (
+    workspaceSlug: string,
+    projectId: string,
+    file: File,
+    commentId?: string,
+    onProgress?: (progress: number) => void
+  ) => this.comment.uploadCommentAttachment(workspaceSlug, projectId, file, commentId, onProgress);
+  removeCommentAttachment = async (
+    workspaceSlug: string,
+    projectId: string,
+    attachmentId: string,
+    commentId?: string
+  ) => this.comment.removeCommentAttachment(workspaceSlug, projectId, attachmentId, commentId);
+  bindCommentAttachments = async (
+    workspaceSlug: string,
+    projectId: string,
+    commentId: string,
+    attachments: TCommentAttachment[]
+  ) => this.comment.bindCommentAttachments(workspaceSlug, projectId, commentId, attachments);
 
   // comment reaction
   fetchCommentReactions = async (workspaceSlug: string, projectId: string, commentId: string) =>

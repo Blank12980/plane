@@ -7,7 +7,7 @@ import json
 
 # Django imports
 from django.utils import timezone
-from django.db.models import Exists
+from django.db.models import Exists, Prefetch
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import IntegrityError
 
@@ -19,7 +19,7 @@ from rest_framework import status
 from .. import BaseViewSet
 from plane.app.serializers import IssueCommentSerializer, CommentReactionSerializer
 from plane.app.permissions import allow_permission, ROLE
-from plane.db.models import IssueComment, ProjectMember, CommentReaction, Project, Issue
+from plane.db.models import IssueComment, ProjectMember, CommentReaction, Project, Issue, FileAsset
 from plane.bgtasks.issue_activities_task import issue_activity
 from plane.utils.host import base_host
 from plane.bgtasks.webhook_task import model_activity
@@ -47,6 +47,15 @@ class IssueCommentViewSet(BaseViewSet):
             .select_related("project")
             .select_related("workspace")
             .select_related("issue")
+            .prefetch_related(
+                Prefetch(
+                    "assets",
+                    queryset=FileAsset.objects.filter(
+                        entity_type=FileAsset.EntityTypeContext.COMMENT_ATTACHMENT,
+                        is_uploaded=True,
+                    ).select_related("workspace"),
+                )
+            )
             .annotate(
                 is_member=Exists(
                     ProjectMember.objects.filter(

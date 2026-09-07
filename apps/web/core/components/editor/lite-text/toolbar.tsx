@@ -34,6 +34,8 @@ type Props = {
   showSubmitButton: boolean;
   editorRef: EditorRefApi | null;
   submitButtonText?: string;
+  /** Rendered next to the submit button, used for the comment attachment picker. */
+  extraActions?: React.ReactNode;
 };
 
 type TCommentAccessType = {
@@ -70,6 +72,7 @@ export function IssueCommentToolbar(props: Props) {
     showSubmitButton,
     editorRef,
     submitButtonText = "common.comment",
+    extraActions,
   } = props;
   // State to manage active states of toolbar items
   const [activeStates, setActiveStates] = useState<Record<string, boolean>>({});
@@ -175,8 +178,9 @@ export function IssueCommentToolbar(props: Props) {
             </div>
           ))}
         </div>
-        {showSubmitButton && (
-          <div className="sticky right-1">
+        <div className="sticky right-1 flex items-center gap-1">
+          {extraActions}
+          {showSubmitButton && (
             <Button
               type="submit"
               variant="primary"
@@ -187,8 +191,8 @@ export function IssueCommentToolbar(props: Props) {
             >
               {t(submitButtonText)}
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

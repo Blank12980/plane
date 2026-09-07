@@ -16,6 +16,36 @@ import type {
   TIssueActivityUserDetail,
 } from "./base";
 
+export type TCommentAttachment = {
+  id: string;
+  attributes: {
+    name: string;
+    type?: string;
+    size: number;
+  };
+  asset_url: string;
+  size: number;
+  is_uploaded: boolean;
+  comment_id: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+};
+
+export type TCommentAttachmentUploadResponse = TFileSignedURLResponse & {
+  attachment: TCommentAttachment;
+};
+
+/** A file that is being uploaded and has no asset on the server yet. */
+export type TCommentAttachmentUploadStatus = {
+  id: string;
+  name: string;
+  progress: number;
+  size: number;
+  type: string;
+};
+
 export type TCommentReaction = {
   id: string;
   reaction: string;
@@ -38,6 +68,7 @@ export type TIssueComment = {
   created_by: string | undefined;
   updated_by: string | undefined;
   attachments: any[];
+  attachment_details: TCommentAttachment[];
   comment_reactions: any[];
   comment_stripped: string;
   comment_html: string;
@@ -53,6 +84,13 @@ export type TCommentsOperations = {
   updateComment: (commentId: string, data: Partial<TIssueComment>) => Promise<void>;
   removeComment: (commentId: string) => Promise<void>;
   uploadCommentAsset: (blockId: string, file: File, commentId?: string) => Promise<TFileSignedURLResponse>;
+  uploadCommentAttachment: (
+    file: File,
+    commentId?: string,
+    onProgress?: (progress: number) => void
+  ) => Promise<TCommentAttachment>;
+  removeCommentAttachment: (attachmentId: string, commentId?: string) => Promise<void>;
+  bindCommentAttachments: (commentId: string, attachments: TCommentAttachment[]) => Promise<void>;
   duplicateCommentAsset: (assetId: string, commentId?: string) => Promise<{ asset_id: string }>;
   addCommentReaction: (commentId: string, reactionEmoji: string) => Promise<void>;
   deleteCommentReaction: (commentId: string, reactionEmoji: string) => Promise<void>;

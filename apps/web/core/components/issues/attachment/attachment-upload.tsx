@@ -28,12 +28,22 @@ export const IssueAttachmentUpload = observer(function IssueAttachmentUpload(pro
   const { maxFileSize } = useFileSize();
 
   const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
-      const currentFile: File = acceptedFiles[0];
-      if (!currentFile || !workspaceSlug) return;
+    async (acceptedFiles: File[]) => {
+      if (acceptedFiles.length === 0 || !workspaceSlug) return;
 
       setIsLoading(true);
-      attachmentOperations.create(currentFile).finally(() => setIsLoading(false));
+      try {
+        // uploaded one by one so that a single failure does not drop the rest
+        for (const file of acceptedFiles) {
+          try {
+            await attachmentOperations.create(file);
+          } catch {
+            // the operation already reports the failure to the user
+          }
+        }
+      } finally {
+        setIsLoading(false);
+      }
     },
     [attachmentOperations, workspaceSlug]
   );
@@ -41,7 +51,7 @@ export const IssueAttachmentUpload = observer(function IssueAttachmentUpload(pro
   const { getRootProps, getInputProps, isDragActive, isDragReject, fileRejections } = useDropzone({
     onDrop,
     maxSize: maxFileSize,
-    multiple: false,
+    multiple: true,
     disabled: isLoading || disabled,
   });
 
@@ -64,7 +74,7 @@ export const IssueAttachmentUpload = observer(function IssueAttachmentUpload(pro
         ) : isLoading ? (
           <p className="text-center">Загрузка...</p>
         ) : (
-          <p className="text-center">Нажмите или перетащите файл сюда</p>
+          <p className="text-center">Нажмите или перетащите файлы сюда</p>
         )}
       </span>
     </div>

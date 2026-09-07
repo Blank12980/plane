@@ -34,6 +34,7 @@ class FileAsset(BaseModel):
         ISSUE_ATTACHMENT = "ISSUE_ATTACHMENT"
         ISSUE_DESCRIPTION = "ISSUE_DESCRIPTION"
         COMMENT_DESCRIPTION = "COMMENT_DESCRIPTION"
+        COMMENT_ATTACHMENT = "COMMENT_ATTACHMENT"
         PAGE_DESCRIPTION = "PAGE_DESCRIPTION"
         USER_COVER = "USER_COVER"
         USER_AVATAR = "USER_AVATAR"
@@ -88,6 +89,9 @@ class FileAsset(BaseModel):
 
         if self.entity_type == self.EntityTypeContext.ISSUE_ATTACHMENT:
             return f"/api/assets/v2/workspaces/{self.workspace.slug}/projects/{self.project_id}/issues/{self.issue_id}/attachments/{self.id}/"  # noqa: E501
+
+        if self.entity_type == self.EntityTypeContext.COMMENT_ATTACHMENT:
+            return f"/api/assets/v2/workspaces/{self.workspace.slug}/projects/{self.project_id}/comment-attachments/{self.id}/"  # noqa: E501
 
         if self.entity_type in [
             self.EntityTypeContext.ISSUE_DESCRIPTION,

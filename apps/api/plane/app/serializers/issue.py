@@ -629,6 +629,40 @@ class IssueAttachmentSerializer(BaseSerializer):
         ]
 
 
+class CommentAttachmentSerializer(BaseSerializer):
+    """Serializer for the files attached to an issue comment."""
+
+    asset_url = serializers.CharField(read_only=True)
+    comment_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = FileAsset
+        fields = [
+            "id",
+            "attributes",
+            "asset_url",
+            "size",
+            "is_uploaded",
+            "comment_id",
+            "created_at",
+            "created_by",
+            "updated_at",
+            "updated_by",
+        ]
+        # `asset_url` and `comment_id` are declared above, DRF rejects declared
+        # fields in `read_only_fields`
+        read_only_fields = [
+            "id",
+            "attributes",
+            "size",
+            "is_uploaded",
+            "created_at",
+            "created_by",
+            "updated_at",
+            "updated_by",
+        ]
+
+
 class IssueAttachmentLiteSerializer(DynamicBaseSerializer):
     class Meta:
         model = FileAsset
@@ -700,6 +734,15 @@ class IssueCommentSerializer(BaseSerializer):
     workspace_detail = WorkspaceLiteSerializer(read_only=True, source="workspace")
     comment_reactions = CommentReactionSerializer(read_only=True, many=True)
     is_member = serializers.BooleanField(read_only=True)
+    attachment_details = serializers.SerializerMethodField(read_only=True)
+
+    def get_attachment_details(self, obj):
+        assets = [
+            asset
+            for asset in obj.assets.all()
+            if asset.entity_type == FileAsset.EntityTypeContext.COMMENT_ATTACHMENT and asset.is_uploaded
+        ]
+        return CommentAttachmentSerializer(assets, many=True).data
 
     class Meta:
         model = IssueComment

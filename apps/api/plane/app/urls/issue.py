@@ -26,6 +26,7 @@ from plane.app.views import (
     IssuePaginatedViewSet,
     IssueDetailEndpoint,
     IssueAttachmentV2Endpoint,
+    CommentAttachmentV2Endpoint,
     IssueBulkUpdateDateEndpoint,
     IssueVersionEndpoint,
     WorkItemDescriptionVersionEndpoint,
@@ -143,6 +144,17 @@ urlpatterns = [
         "assets/v2/workspaces/<str:slug>/projects/<uuid:project_id>/issues/<uuid:issue_id>/attachments/<uuid:pk>/",
         IssueAttachmentV2Endpoint.as_view(),
         name="project-issue-attachments",
+    ),
+    # V2 Comment attachments
+    path(
+        "assets/v2/workspaces/<str:slug>/projects/<uuid:project_id>/comment-attachments/",
+        CommentAttachmentV2Endpoint.as_view(),
+        name="project-comment-attachments",
+    ),
+    path(
+        "assets/v2/workspaces/<str:slug>/projects/<uuid:project_id>/comment-attachments/<uuid:pk>/",
+        CommentAttachmentV2Endpoint.as_view(),
+        name="project-comment-attachments",
     ),
     ## End Issues
     ## Issue Activity

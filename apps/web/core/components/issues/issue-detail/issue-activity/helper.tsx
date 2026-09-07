@@ -27,6 +27,9 @@ export const useWorkItemCommentOperations = (
     createComment,
     updateComment,
     removeComment,
+    uploadCommentAttachment,
+    removeCommentAttachment,
+    bindCommentAttachments,
     createCommentReaction,
     removeCommentReaction,
     issue: { getIssueById },
@@ -142,6 +145,47 @@ export const useWorkItemCommentOperations = (
           throw new Error(t("issue.comments.upload.error"));
         }
       },
+      uploadCommentAttachment: async (file, commentId, onProgress) => {
+        try {
+          if (!workspaceSlug || !projectId) throw new Error("Missing fields");
+          return await uploadCommentAttachment(workspaceSlug, projectId, file, commentId, onProgress);
+        } catch (error) {
+          console.error("Error in uploading comment attachment:", error);
+          setToast({
+            title: t("common.error.label"),
+            type: TOAST_TYPE.ERROR,
+            message: t("issue.comments.attachment.upload.error"),
+          });
+          throw error;
+        }
+      },
+      removeCommentAttachment: async (attachmentId, commentId) => {
+        try {
+          if (!workspaceSlug || !projectId) throw new Error("Missing fields");
+          await removeCommentAttachment(workspaceSlug, projectId, attachmentId, commentId);
+          setToast({
+            title: t("common.success"),
+            type: TOAST_TYPE.SUCCESS,
+            message: t("issue.comments.attachment.remove.success"),
+          });
+        } catch (error) {
+          console.error("Error in removing comment attachment:", error);
+          setToast({
+            title: t("common.error.label"),
+            type: TOAST_TYPE.ERROR,
+            message: t("issue.comments.attachment.remove.error"),
+          });
+          throw error;
+        }
+      },
+      bindCommentAttachments: async (commentId, attachments) => {
+        try {
+          if (!workspaceSlug || !projectId) throw new Error("Missing fields");
+          await bindCommentAttachments(workspaceSlug, projectId, commentId, attachments);
+        } catch (error) {
+          console.error("Error in linking comment attachments:", error);
+        }
+      },
       duplicateCommentAsset: async (assetId, commentId) => {
         try {
           if (!workspaceSlug || !projectId) throw new Error("Missing fields");
@@ -210,7 +254,18 @@ export const useWorkItemCommentOperations = (
       },
     };
     return ops;
-  }, [workspaceSlug, projectId, issueId, createComment, updateComment, uploadEditorAsset, removeComment]);
+  }, [
+    workspaceSlug,
+    projectId,
+    issueId,
+    createComment,
+    updateComment,
+    uploadEditorAsset,
+    removeComment,
+    uploadCommentAttachment,
+    removeCommentAttachment,
+    bindCommentAttachments,
+  ]);
 
   return operations;
 };

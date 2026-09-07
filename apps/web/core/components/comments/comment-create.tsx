@@ -18,6 +18,8 @@ import { LiteTextEditor } from "@/components/editor/lite-text";
 import { useWorkspace } from "@/hooks/store/use-workspace";
 // services
 import { FileService } from "@/services/file.service";
+// local imports
+import { CommentAttachmentButton, CommentAttachmentList, useCommentAttachments } from "./attachments";
 
 type TCommentCreate = {
   entityId: string;
@@ -44,6 +46,9 @@ export const CommentCreate = observer(function CommentCreate(props: TCommentCrea
   const [uploadedAssetIds, setUploadedAssetIds] = useState<string[]>([]);
   // refs
   const editorRef = useRef<EditorRefApi>(null);
+  // comment attachments
+  const { pendingAttachments, uploadStatus, isUploading, uploadFiles, removeAttachment, clearPendingAttachments } =
+    useCommentAttachments({ activityOperations });
   // store hooks
   const workspaceStore = useWorkspace();
   // derived values
@@ -62,9 +67,16 @@ export const CommentCreate = observer(function CommentCreate(props: TCommentCrea
   });
 
   const onSubmit = async (formData: Partial<TIssueComment>) => {
+    // wait for every attachment to finish uploading before the comment is created
+    if (isUploading) return;
     try {
       const comment = await activityOperations.createComment(formData);
-      if (comment?.id) onSubmitCallback?.(comment.id);
+      if (comment?.id) {
+        // the assets were uploaded before the comment existed, bind them to it now
+        await activityOperations.bindCommentAttachments(comment.id, pendingAttachments);
+        clearPendingAttachments();
+        onSubmitCallback?.(comment.id);
+      }
       if (uploadedAssetIds.length > 0) {
         if (projectId) {
           await fileService.updateBulkProjectAssetsUploadStatus(workspaceSlug, projectId.toString(), entityId, {
@@ -88,7 +100,8 @@ export const CommentCreate = observer(function CommentCreate(props: TCommentCrea
   };
 
   const commentHTML = watch("comment_html");
-  const isEmpty = isCommentEmpty(commentHTML ?? undefined);
+  const hasAttachments = pendingAttachments.length > 0;
+  const isEmpty = isCommentEmpty(commentHTML ?? undefined) && !hasAttachments;
 
   return (
     <div
@@ -101,6 +114,7 @@ export const CommentCreate = observer(function CommentCreate(props: TCommentCrea
           !e.metaKey &&
           !isEmpty &&
           !isSubmitting &&
+          !isUploading &&
           editorRef.current?.isEditorReadyToDiscard()
         )
           handleSubmit(onSubmit)(e);
@@ -122,7 +136,7 @@ export const CommentCreate = observer(function CommentCreate(props: TCommentCrea
                 workspaceSlug={workspaceSlug}
                 projectId={projectId}
                 onEnterKeyPress={(e) => {
-                  if (!isEmpty && !isSubmitting) {
+                  if (!isEmpty && !isSubmitting && !isUploading) {
                     handleSubmit(onSubmit)(e);
                   }
                 }}
@@ -144,6 +158,8 @@ export const CommentCreate = observer(function CommentCreate(props: TCommentCrea
                   return asset_id;
                 }}
                 showToolbarInitially={showToolbarInitially}
+                allowEmptySubmit={hasAttachments}
+                extraToolbarActions={<CommentAttachmentButton onFilesSelected={uploadFiles} disabled={isSubmitting} />}
                 parentClassName="p-2"
                 displayConfig={{
                   fontSize: "small-font",
@@ -152,6 +168,13 @@ export const CommentCreate = observer(function CommentCreate(props: TCommentCrea
             )}
           />
         )}
+      />
+      <CommentAttachmentList
+        attachments={pendingAttachments}
+        uploadStatus={uploadStatus}
+        onRemove={removeAttachment}
+        disabled={isSubmitting}
+        className="px-2 pb-2"
       />
     </div>
   );

@@ -228,8 +228,11 @@ class WorkspaceFileAssetEndpoint(BaseAPIView):
         if entity_type == FileAsset.EntityTypeContext.PAGE_DESCRIPTION:
             return {"page_id": entity_id}
 
-        # Comment Description
-        if entity_type == FileAsset.EntityTypeContext.COMMENT_DESCRIPTION:
+        # Comment Description and Attachment
+        if entity_type in [
+            FileAsset.EntityTypeContext.COMMENT_DESCRIPTION,
+            FileAsset.EntityTypeContext.COMMENT_ATTACHMENT,
+        ]:
             return {"comment_id": entity_id}
         return {}
 
@@ -502,7 +505,10 @@ class ProjectAssetEndpoint(BaseAPIView):
         if entity_type == FileAsset.EntityTypeContext.PAGE_DESCRIPTION:
             return {"page_id": entity_id}
 
-        if entity_type == FileAsset.EntityTypeContext.COMMENT_DESCRIPTION:
+        if entity_type in [
+            FileAsset.EntityTypeContext.COMMENT_DESCRIPTION,
+            FileAsset.EntityTypeContext.COMMENT_ATTACHMENT,
+        ]:
             return {"comment_id": entity_id}
 
         if entity_type == FileAsset.EntityTypeContext.DRAFT_ISSUE_DESCRIPTION:
@@ -666,6 +672,14 @@ class ProjectBulkAssetEndpoint(BaseAPIView):
             except IntegrityError:
                 pass
 
+        if asset.entity_type == FileAsset.EntityTypeContext.COMMENT_ATTACHMENT:
+            # The comment is created after its attachments are uploaded, so the
+            # assets are bound to the comment here
+            try:
+                assets.update(comment_id=entity_id, project_id=project_id)
+            except IntegrityError:
+                pass
+
         if asset.entity_type == FileAsset.EntityTypeContext.COMMENT_DESCRIPTION:
             # For some cases, the bulk api is called after the comment is deleted
             # creating an integrity error
@@ -727,8 +741,11 @@ class DuplicateAssetEndpoint(BaseAPIView):
         if entity_type == FileAsset.EntityTypeContext.PAGE_DESCRIPTION:
             return {"page_id": entity_id}
 
-        # Comment Description
-        if entity_type == FileAsset.EntityTypeContext.COMMENT_DESCRIPTION:
+        # Comment Description and Attachment
+        if entity_type in [
+            FileAsset.EntityTypeContext.COMMENT_DESCRIPTION,
+            FileAsset.EntityTypeContext.COMMENT_ATTACHMENT,
+        ]:
             return {"comment_id": entity_id}
 
         return {}

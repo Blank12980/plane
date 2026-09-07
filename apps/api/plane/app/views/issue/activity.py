@@ -18,7 +18,7 @@ from rest_framework import status
 from .. import BaseAPIView
 from plane.app.serializers import IssueActivitySerializer, IssueCommentSerializer
 from plane.app.permissions import ProjectEntityPermission, allow_permission, ROLE
-from plane.db.models import IssueActivity, IssueComment, CommentReaction, IntakeIssue
+from plane.db.models import IssueActivity, IssueComment, CommentReaction, IntakeIssue, FileAsset
 
 
 class IssueActivityEndpoint(BaseAPIView):
@@ -59,7 +59,14 @@ class IssueActivityEndpoint(BaseAPIView):
                 Prefetch(
                     "comment_reactions",
                     queryset=CommentReaction.objects.select_related("actor"),
-                )
+                ),
+                Prefetch(
+                    "assets",
+                    queryset=FileAsset.objects.filter(
+                        entity_type=FileAsset.EntityTypeContext.COMMENT_ATTACHMENT,
+                        is_uploaded=True,
+                    ).select_related("workspace"),
+                ),
             )
         )
 

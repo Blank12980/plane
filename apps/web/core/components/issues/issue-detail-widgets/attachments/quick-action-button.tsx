@@ -49,40 +49,32 @@ export const IssueAttachmentActionButton = observer(function IssueAttachmentActi
   }, [fetchActivities, workspaceSlug, projectId, issueId]);
 
   const onDrop = useCallback(
-    (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
-      const totalAttachedFiles = acceptedFiles.length + rejectedFiles.length;
-
-      if (rejectedFiles.length === 0) {
-        const currentFile: File = acceptedFiles[0];
-        if (!currentFile || !workspaceSlug) return;
-
-        setIsLoading(true);
-        attachmentOperations
-          .create(currentFile)
-          .catch(() => {
-            setToast({
-              type: TOAST_TYPE.ERROR,
-              title: "Ошибка!",
-              message: "Не удалось прикрепить файл. Попробуйте загрузить снова.",
-            });
-          })
-          .finally(() => {
-            handleFetchPropertyActivities();
-            setLastWidgetAction("attachments");
-            setIsLoading(false);
-          });
-        return;
+    async (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
+      if (rejectedFiles.length > 0) {
+        setToast({
+          type: TOAST_TYPE.ERROR,
+          title: "Ошибка!",
+          message: `Размер файла должен быть не более ${maxFileSize / 1024 / 1024} МБ.`,
+        });
       }
 
-      setToast({
-        type: TOAST_TYPE.ERROR,
-        title: "Ошибка!",
-        message:
-          totalAttachedFiles > 1
-            ? "За один раз можно загрузить только один файл."
-            : `Размер файла должен быть не более ${maxFileSize / 1024 / 1024} МБ.`,
-      });
-      return;
+      if (acceptedFiles.length === 0 || !workspaceSlug) return;
+
+      setIsLoading(true);
+      try {
+        // uploaded one by one so that a single failure does not drop the rest
+        for (const file of acceptedFiles) {
+          try {
+            await attachmentOperations.create(file);
+          } catch {
+            // the operation already reports the failure to the user
+          }
+        }
+      } finally {
+        handleFetchPropertyActivities();
+        setLastWidgetAction("attachments");
+        setIsLoading(false);
+      }
     },
     [attachmentOperations, maxFileSize, workspaceSlug, handleFetchPropertyActivities, setLastWidgetAction]
   );
@@ -90,7 +82,7 @@ export const IssueAttachmentActionButton = observer(function IssueAttachmentActi
   const { getRootProps, getInputProps } = useDropzone({
     onDrop,
     maxSize: maxFileSize,
-    multiple: false,
+    multiple: true,
     disabled: isLoading || disabled,
   });
 

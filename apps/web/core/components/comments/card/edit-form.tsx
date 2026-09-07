@@ -14,6 +14,8 @@ import type { TCommentsOperations, TIssueComment } from "@plane/types";
 import { cn, isCommentEmpty } from "@plane/utils";
 // components
 import { LiteTextEditor } from "@/components/editor/lite-text";
+// local imports
+import { CommentAttachmentButton, CommentAttachmentList, useCommentAttachments } from "../attachments";
 
 type Props = {
   activityOperations: TCommentsOperations;
@@ -39,6 +41,11 @@ export const CommentCardEditForm = observer(function CommentCardEditForm(props: 
   } = props;
   // refs
   const editorRef = useRef<EditorRefApi>(null);
+  // comment attachments
+  const { uploadStatus, isUploading, uploadFiles, removeAttachment } = useCommentAttachments({
+    activityOperations,
+    commentId: comment.id,
+  });
   // form info
   const {
     formState: { isSubmitting },
@@ -51,10 +58,11 @@ export const CommentCardEditForm = observer(function CommentCardEditForm(props: 
   });
   const commentHTML = watch("comment_html");
 
-  const isEmpty = isCommentEmpty(commentHTML);
+  const attachments = comment.attachment_details ?? [];
+  const isEmpty = isCommentEmpty(commentHTML) && attachments.length === 0;
   const isEditorReadyToDiscard = editorRef.current?.isEditorReadyToDiscard();
   const isSubmitButtonDisabled = isSubmitting || !isEditorReadyToDiscard;
-  const isDisabled = isSubmitting || isEmpty || isSubmitButtonDisabled;
+  const isDisabled = isSubmitting || isEmpty || isSubmitButtonDisabled || isUploading;
 
   const onEnter = async (formData: Partial<TIssueComment>) => {
     if (isSubmitting || !comment) return;
@@ -95,6 +103,8 @@ export const CommentCardEditForm = observer(function CommentCardEditForm(props: 
             }
           }}
           showSubmitButton={false}
+          allowEmptySubmit={attachments.length > 0}
+          extraToolbarActions={<CommentAttachmentButton onFilesSelected={uploadFiles} disabled={isSubmitting} />}
           uploadFile={async (blockId, file) => {
             const { asset_id } = await activityOperations.uploadCommentAsset(blockId, file, comment.id);
             return asset_id;
@@ -108,6 +118,13 @@ export const CommentCardEditForm = observer(function CommentCardEditForm(props: 
           displayConfig={{
             fontSize: "small-font",
           }}
+        />
+        <CommentAttachmentList
+          attachments={attachments}
+          uploadStatus={uploadStatus}
+          onRemove={removeAttachment}
+          disabled={isSubmitting}
+          className="pt-2"
         />
       </div>
       <div className="flex gap-2 self-end">

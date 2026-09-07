@@ -15,9 +15,11 @@ type LiteToolbarProps = {
   isSubmitting: boolean;
   isEmpty: boolean;
   executeCommand: (item: ToolbarMenuItem) => void;
+  /** Rendered next to the submit button, used for the comment attachment picker. */
+  extraActions?: React.ReactNode;
 };
 
-export function LiteToolbar({ onSubmit, isSubmitting, isEmpty, executeCommand }: LiteToolbarProps) {
+export function LiteToolbar({ onSubmit, isSubmitting, isEmpty, executeCommand, extraActions }: LiteToolbarProps) {
   return (
     <div className="flex items-center gap-2 pb-1">
       <button
@@ -27,6 +29,7 @@ export function LiteToolbar({ onSubmit, isSubmitting, isEmpty, executeCommand }:
       >
         <Paperclip className="size-3" />
       </button>
+      {extraActions}
       <button
         type="button"
         onClick={(e) => onSubmit(e)}

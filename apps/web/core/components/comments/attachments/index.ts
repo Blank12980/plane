@@ -4,5 +4,7 @@
  * See the LICENSE file for details.
  */
 
-export * from "./attachments";
-export * from "./comments";
+export * from "./attachment-button";
+export * from "./attachment-chip";
+export * from "./attachment-list";
+export * from "./use-comment-attachments";

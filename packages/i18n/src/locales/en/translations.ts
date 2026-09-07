@@ -921,6 +921,19 @@ export default {
       upload: {
         error: "Asset upload failed. Please try again later.",
       },
+      attachment: {
+        label: "Attachments",
+        add: "Attach files",
+        uploading: "Uploading",
+        upload: {
+          error: "File upload failed. Please try again later.",
+        },
+        remove: {
+          success: "Attachment removed successfully",
+          error: "Attachment could not be removed. Please try again later.",
+        },
+        size_error: "File is too large. Maximum size is {size} MB.",
+      },
       copy_link: {
         success: "Comment link copied to clipboard",
         error: "Error copying comment link. Please try again later.",

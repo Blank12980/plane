@@ -45,6 +45,10 @@ type LiteTextEditorWrapperProps = MakeOptional<
   parentClassName?: string;
   editorClassName?: string;
   submitButtonText?: string;
+  /** Rendered in the editor toolbar, used for the comment attachment picker. */
+  extraToolbarActions?: React.ReactNode;
+  /** Allows submitting an empty comment, e.g. when it only carries attachments. */
+  allowEmptySubmit?: boolean;
 } & (
     | {
         editable: false;
@@ -81,6 +85,8 @@ export const LiteTextEditor = React.forwardRef(function LiteTextEditor(
     editorClassName = "",
     showPlaceholderOnEmpty = true,
     submitButtonText = "common.comment",
+    extraToolbarActions,
+    allowEmptySubmit = false,
     ...rest
   } = props;
   // states
@@ -115,7 +121,7 @@ export const LiteTextEditor = React.forwardRef(function LiteTextEditor(
     return !!ref && typeof ref === "object" && "current" in ref;
   }
   // derived values
-  const isEmpty = isCommentEmpty(props.initialValue);
+  const isEmpty = isCommentEmpty(props.initialValue) && !allowEmptySubmit;
 
   return (
     <div
@@ -187,6 +193,7 @@ export const LiteTextEditor = React.forwardRef(function LiteTextEditor(
             onSubmit={(e) => rest.onEnterKeyPress?.(e)}
             isSubmitting={isSubmitting}
             isEmpty={isEmpty}
+            extraActions={extraToolbarActions}
           />
         )}
       </div>
@@ -217,6 +224,7 @@ export const LiteTextEditor = React.forwardRef(function LiteTextEditor(
             editorRef={editorRef}
             showSubmitButton={showSubmitButton}
             submitButtonText={submitButtonText}
+            extraActions={extraToolbarActions}
           />
         </div>
       )}
