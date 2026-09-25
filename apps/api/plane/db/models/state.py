@@ -11,6 +11,7 @@ from django.db.models import Q
 from .project import ProjectBaseModel
 from plane.db.mixins import SoftDeletionManager
 
+
 class StateGroup(models.TextChoices):
     BACKLOG = "backlog", "Backlog"
     UNSTARTED = "unstarted", "Unstarted"
@@ -45,6 +46,12 @@ DEFAULT_STATES = [
         "name": "На ревью",
         "color": "#8B5CF6",
         "sequence": 40000,
+        "group": StateGroup.STARTED.value,
+    },
+    {
+        "name": "Тестирование",
+        "color": "#06B6D4",
+        "sequence": 42500,
         "group": StateGroup.STARTED.value,
     },
     {

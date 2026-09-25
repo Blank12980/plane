@@ -2,8 +2,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
-import pytest
+from importlib import import_module
+from types import SimpleNamespace
 
+import pytest
+from django.apps import apps
+from django.db import connection
+
+from plane.db.models import Project, State
 from plane.db.models.state import DEFAULT_STATES, StateGroup
 
 
@@ -17,6 +23,7 @@ class TestDefaultStates:
             "На уточнении",
             "В работе",
             "На ревью",
+            "Тестирование",
             "Готово",
         ]
 
@@ -30,4 +37,39 @@ class TestDefaultStates:
         assert groups_by_name["На уточнении"] == StateGroup.UNSTARTED.value
         assert groups_by_name["В работе"] == StateGroup.STARTED.value
         assert groups_by_name["На ревью"] == StateGroup.STARTED.value
+        assert groups_by_name["Тестирование"] == StateGroup.STARTED.value
         assert groups_by_name["Готово"] == StateGroup.COMPLETED.value
+
+    @pytest.mark.django_db
+    def test_existing_project_gets_testing_state_once(self, workspace):
+        project = Project.objects.create(name="Existing project", identifier="EX", workspace=workspace)
+        State.objects.bulk_create(
+            [
+                State(
+                    name=name,
+                    color="#8B5CF6",
+                    sequence=sequence,
+                    group=group,
+                    project=project,
+                    workspace=workspace,
+                )
+                for name, sequence, group in [
+                    ("На ревью", 40000, StateGroup.STARTED.value),
+                    ("Готово", 45000, StateGroup.COMPLETED.value),
+                ]
+            ]
+        )
+
+        migration = import_module("plane.db.migrations.0130_testing_task_state")
+        schema_editor = SimpleNamespace(connection=connection)
+        migration.add_testing_task_state(apps, schema_editor)
+        migration.add_testing_task_state(apps, schema_editor)
+
+        testing_states = State.objects.filter(project=project, name="Тестирование")
+        assert testing_states.count() == 1
+        assert testing_states.get().group == StateGroup.STARTED.value
+        assert list(State.objects.filter(project=project).values_list("name", flat=True)) == [
+            "На ревью",
+            "Тестирование",
+            "Готово",
+        ]
