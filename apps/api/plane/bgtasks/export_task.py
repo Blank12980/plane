@@ -19,10 +19,11 @@ from django.utils import timezone
 from django.db.models import Prefetch
 
 # Module imports
-from plane.db.models import ExporterHistory, Issue, IssueComment, IssueRelation, IssueSubscriber
+from plane.db.models import ExporterHistory, Issue, IssueComment, IssueRelation, IssueSubscriber, ModuleIssue
 from plane.utils.exception_logger import log_exception
 from plane.utils.porters.exporter import DataExporter
 from plane.utils.porters.serializers.issue import IssueExportSerializer
+from plane.utils.porters.serializers.module_task_status import ModuleTaskStatusExportSerializer
 
 
 def create_zip_file(files: List[tuple[str, str | bytes]]) -> io.BytesIO:
@@ -132,6 +133,7 @@ def issue_export_task(
     token_id: str,
     multiple: bool,
     slug: str,
+    layout: str = "full",
 ):
     """
     Export issues from the workspace.
@@ -144,23 +146,36 @@ def issue_export_task(
         exporter_instance.status = "processing"
         exporter_instance.save(update_fields=["status"])
 
-        # Build base queryset for issues
+        # The compact report only needs the current state and active module links.
         workspace_issues = (
             Issue.objects.filter(
                 workspace__id=workspace_id,
                 project_id__in=project_ids,
                 project__project_projectmember__member=exporter_instance.initiated_by_id,
                 project__project_projectmember__is_active=True,
+                project__project_projectmember__deleted_at__isnull=True,
                 project__archived_at__isnull=True,
             )
-            .select_related(
-                "project",
+            .select_related("project", "state")
+            .distinct()
+        )
+
+        if layout == "module_task_status":
+            workspace_issues = workspace_issues.prefetch_related(
+                Prefetch(
+                    "issue_module",
+                    queryset=ModuleIssue.objects.filter(module__deleted_at__isnull=True).select_related("module"),
+                    to_attr="export_modules",
+                )
+            ).order_by("project__name", "sequence_id", "id")
+            serializer_class = ModuleTaskStatusExportSerializer
+            multiple = True
+        else:
+            workspace_issues = workspace_issues.select_related(
                 "workspace",
-                "state",
                 "created_by",
                 "estimate_point",
-            )
-            .prefetch_related(
+            ).prefetch_related(
                 "labels",
                 "issue_cycle__cycle",
                 "issue_module__module",
@@ -187,11 +202,15 @@ def issue_export_task(
                     queryset=Issue.objects.select_related("type", "project"),
                 ),
             )
-        )
+            serializer_class = IssueExportSerializer
 
         # Create exporter for the specified format
         try:
-            exporter = DataExporter(IssueExportSerializer, format_type=provider)
+            exporter = DataExporter(
+                serializer_class,
+                format_type=provider,
+                headers=["Модуль", "Задача", "Статус"] if layout == "module_task_status" else None,
+            )
         except ValueError as e:
             # Invalid format type
             exporter_instance = ExporterHistory.objects.get(token=token_id)
@@ -205,7 +224,8 @@ def issue_export_task(
             # Export each project separately with its own queryset
             for project_id in project_ids:
                 project_issues = workspace_issues.filter(project_id=project_id)
-                export_filename = f"{slug}-{project_id}"
+                suffix = "-module-task-status" if layout == "module_task_status" else ""
+                export_filename = f"{slug}-{project_id}{suffix}"
                 filename, content = exporter.export(export_filename, project_issues)
                 files.append((filename, content))
         else:

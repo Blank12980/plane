@@ -1741,6 +1741,11 @@ export default {
         exporting: "Экспортируется",
         exporting_projects: "Экспорт проекта",
         format: "Формат",
+        columns: "Колонки",
+        layouts: {
+          full: "Все поля задачи",
+          module_task_status: "Модуль - Задача - Статус (отдельный файл для каждого проекта)",
+        },
         previous_exports: "Предыдущие экспорты",
         export_separate_files: "Экспорт в отдельные файлы",
         filters_info: "Примените фильтры для экспорта конкретных рабочих элементов по вашим критериям.",

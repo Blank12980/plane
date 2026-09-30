@@ -27,7 +27,7 @@ class DataExporter:
         "xlsx": XLSXFormatter,
     }
 
-    def __init__(self, serializer_class, format_type: str = None, **serializer_kwargs):
+    def __init__(self, serializer_class, format_type: str = None, headers: List[str] = None, **serializer_kwargs):
         """
         Initialize exporter with serializer and optional format type.
 
@@ -39,6 +39,7 @@ class DataExporter:
         self.serializer_class = serializer_class
         self.serializer_kwargs = serializer_kwargs
         self.format_type = format_type
+        self.headers = headers
         self.formatter = None
 
         if format_type:
@@ -53,7 +54,9 @@ class DataExporter:
 
         # Apply format-specific options
         if format_type == "xlsx":
-            return formatter_class(list_joiner=", ")
+            return formatter_class(list_joiner=", ", headers=self.headers)
+        if format_type == "csv":
+            return formatter_class(headers=self.headers)
         else:
             return formatter_class()
 

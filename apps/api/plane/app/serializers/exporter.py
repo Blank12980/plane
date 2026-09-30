@@ -18,6 +18,7 @@ class ExporterHistorySerializer(BaseSerializer):
             "created_at",
             "updated_at",
             "project",
+            "name",
             "provider",
             "status",
             "url",

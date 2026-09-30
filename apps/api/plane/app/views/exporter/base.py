@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+# Python imports
+from uuid import UUID
+
 # Third Party imports
 from rest_framework import status
 from rest_framework.response import Response
@@ -27,6 +30,10 @@ class ExportIssuesEndpoint(BaseAPIView):
         provider = request.data.get("provider", False)
         multiple = request.data.get("multiple", False)
         project_ids = request.data.get("project", [])
+        layout = request.data.get("layout", "full")
+
+        if layout not in ["full", "module_task_status"]:
+            return Response({"error": "Invalid export layout."}, status=status.HTTP_400_BAD_REQUEST)
 
         if provider in ["csv", "xlsx", "json"]:
             if not project_ids:
@@ -38,12 +45,36 @@ class ExportIssuesEndpoint(BaseAPIView):
                 ).values_list("id", flat=True)
                 project_ids = [str(project_id) for project_id in project_ids]
 
+            if layout == "module_task_status":
+                if not isinstance(project_ids, list):
+                    return Response({"error": "Project must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+                try:
+                    requested_ids = {str(UUID(str(project_id))) for project_id in project_ids}
+                except (TypeError, ValueError, AttributeError):
+                    return Response({"error": "Invalid project ID."}, status=status.HTTP_400_BAD_REQUEST)
+                accessible_ids = {
+                    str(project_id)
+                    for project_id in Project.objects.filter(
+                        id__in=requested_ids,
+                        workspace=workspace,
+                        project_projectmember__member=request.user,
+                        project_projectmember__is_active=True,
+                        project_projectmember__deleted_at__isnull=True,
+                        archived_at__isnull=True,
+                    ).values_list("id", flat=True)
+                }
+                if requested_ids != accessible_ids:
+                    return Response({"error": "Project not found."}, status=status.HTTP_404_NOT_FOUND)
+                project_ids = sorted(requested_ids)
+                multiple = True
+
             exporter = ExporterHistory.objects.create(
                 workspace=workspace,
                 project=project_ids,
                 initiated_by=request.user,
                 provider=provider,
                 type="issue_exports",
+                name=layout,
             )
 
             issue_export_task.delay(
@@ -53,6 +84,7 @@ class ExportIssuesEndpoint(BaseAPIView):
                 token_id=exporter.token,
                 multiple=multiple,
                 slug=slug,
+                layout=layout,
             )
             return Response(
                 {"message": "Once the export is ready you will be able to download it"},

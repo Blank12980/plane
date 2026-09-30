@@ -55,7 +55,9 @@ class JSONFormatter(BaseFormatter):
 
 
 class CSVFormatter(BaseFormatter):
-    def __init__(self, flatten: bool = True, delimiter: str = ",", prettify_headers: bool = True):
+    def __init__(
+        self, flatten: bool = True, delimiter: str = ",", prettify_headers: bool = True, headers: List[str] = None
+    ):
         """
         Args:
             flatten: Whether to flatten nested dicts.
@@ -65,6 +67,7 @@ class CSVFormatter(BaseFormatter):
         self.flatten = flatten
         self.delimiter = delimiter
         self.prettify_headers = prettify_headers
+        self.headers = headers
 
     def _prettify_header(self, header: str) -> str:
         """Transform 'created_by_name' → 'Created By Name'"""
@@ -106,14 +109,14 @@ class CSVFormatter(BaseFormatter):
         return result
 
     def encode(self, data: List[Dict]) -> str:
-        if not data:
+        if not data and not self.headers:
             return ""
 
         if self.flatten:
             data = [self._flatten(row) for row in data]
 
         # Collect all unique field names in order
-        fieldnames = []
+        fieldnames = list(self.headers or [])
         for row in data:
             for key in row.keys():
                 if key not in fieldnames:
@@ -168,7 +171,7 @@ class CSVFormatter(BaseFormatter):
 class XLSXFormatter(BaseFormatter):
     """Formatter for XLSX (Excel) files using openpyxl."""
 
-    def __init__(self, prettify_headers: bool = True, list_joiner: str = ", "):
+    def __init__(self, prettify_headers: bool = True, list_joiner: str = ", ", headers: List[str] = None):
         """
         Args:
             prettify_headers: If True, transforms 'created_by_name' → 'Created By Name'.
@@ -176,6 +179,7 @@ class XLSXFormatter(BaseFormatter):
         """
         self.prettify_headers = prettify_headers
         self.list_joiner = list_joiner
+        self.headers = headers
 
     def _prettify_header(self, header: str) -> str:
         """Transform 'created_by_name' → 'Created By Name'"""
@@ -193,14 +197,14 @@ class XLSXFormatter(BaseFormatter):
             return self.list_joiner.join(str(v) for v in value)
         if isinstance(value, dict):
             return json.dumps(value)
-        return value
+        return sanitize_csv_value(value)
 
     def encode(self, data: List[Dict]) -> bytes:
         """Encode data to XLSX bytes."""
         wb = Workbook()
         ws = wb.active
 
-        if not data:
+        if not data and not self.headers:
             # Return empty workbook
             output = BytesIO()
             wb.save(output)
@@ -208,7 +212,7 @@ class XLSXFormatter(BaseFormatter):
             return output.getvalue()
 
         # Collect all unique field names in order
-        fieldnames = []
+        fieldnames = list(self.headers or [])
         for row in data:
             for key in row.keys():
                 if key not in fieldnames:

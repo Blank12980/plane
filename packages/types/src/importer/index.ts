@@ -44,6 +44,7 @@ export interface IExportData {
   created_at: string;
   updated_at: string;
   project: string[];
+  name: string | null;
   provider: string;
   status: string;
   url: string;

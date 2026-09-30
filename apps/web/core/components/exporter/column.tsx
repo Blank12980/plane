@@ -5,6 +5,7 @@
  */
 
 import { Download } from "lucide-react";
+import { useTranslation } from "@plane/i18n";
 import type { IExportData } from "@plane/types";
 import { getDate, getFileURL, renderFormattedDate } from "@plane/utils";
 
@@ -17,6 +18,7 @@ const checkExpiry = (inputDateString: string) => {
   return expiryDate > currentDate;
 };
 export const useExportColumns = () => {
+  const { t } = useTranslation();
   const columns = [
     {
       key: "Exported By",
@@ -68,6 +70,17 @@ export const useExportColumns = () => {
               : rowData.provider === "json"
                 ? "JSON"
                 : ""}
+        </span>
+      ),
+    },
+    {
+      key: "Columns",
+      content: t("workspace_settings.settings.exports.columns"),
+      tdRender: (rowData: RowData) => (
+        <span className="text-13">
+          {t(
+            `workspace_settings.settings.exports.layouts.${rowData.name === "module_task_status" ? rowData.name : "full"}`
+          )}
         </span>
       ),
     },

@@ -39,6 +39,7 @@ type FormData = {
   provider: (typeof EXPORTERS_LIST)[0];
   project: string[];
   multiple: boolean;
+  layout: "full" | "module_task_status";
   filters: TWorkItemFilterExpression;
 };
 
@@ -71,6 +72,7 @@ export const ExportForm = observer(function ExportForm(props: Props) {
       provider: EXPORTERS_LIST[0],
       project: [],
       multiple: false,
+      layout: "full",
       filters: {},
     },
   });
@@ -103,7 +105,8 @@ export const ExportForm = observer(function ExportForm(props: Props) {
       const payload = {
         provider: formData.provider.provider,
         project: formData.project,
-        multiple: formData.project.length > 1,
+        multiple: formData.layout === "module_task_status" || formData.project.length > 1,
+        layout: formData.layout,
         rich_filters: formData.filters,
       };
       try {
@@ -202,6 +205,34 @@ export const ExportForm = observer(function ExportForm(props: Props) {
                       <span className="truncate">{t(service.i18n_title)}</span>
                     </CustomSelect.Option>
                   ))}
+                </CustomSelect>
+              )}
+            />
+          }
+        />
+        <SettingsBoxedControlItem
+          className="rounded-none border-0 border-b"
+          title={t("workspace_settings.settings.exports.columns")}
+          control={
+            <Controller
+              control={control}
+              name="layout"
+              disabled={!isMember && (!hasProjects || !canPerformAnyCreateAction)}
+              render={({ field: { value, onChange } }) => (
+                <CustomSelect
+                  value={value}
+                  onChange={onChange}
+                  label={t(`workspace_settings.settings.exports.layouts.${value}`)}
+                  optionsClassName="max-w-48 sm:max-w-[532px]"
+                  placement="bottom-end"
+                  buttonClassName="py-2 text-13"
+                >
+                  <CustomSelect.Option value="full">
+                    {t("workspace_settings.settings.exports.layouts.full")}
+                  </CustomSelect.Option>
+                  <CustomSelect.Option value="module_task_status">
+                    {t("workspace_settings.settings.exports.layouts.module_task_status")}
+                  </CustomSelect.Option>
                 </CustomSelect>
               )}
             />

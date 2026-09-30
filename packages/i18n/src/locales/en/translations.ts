@@ -1561,6 +1561,11 @@ export default {
         export_separate_files: "Export the data into separate files",
         exporting_projects: "Exporting project",
         format: "Format",
+        columns: "Columns",
+        layouts: {
+          full: "All task fields",
+          module_task_status: "Module - Task - Status (one file per project)",
+        },
         filters_info: "Apply filters to export specific work items based on your criteria.",
         modal: {
           title: "Export to",
