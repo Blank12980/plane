@@ -1,0 +1,41 @@
+{
+  "name": "mcp",
+  "version": "1.2.3",
+  "private": true,
+  "description": "Model Context Protocol server that lets AI agents work with Gizmo through the public API",
+  "license": "AGPL-3.0",
+  "author": "Gizmo Software Inc.",
+  "type": "module",
+  "main": "./dist/start.mjs",
+  "module": "./dist/start.mjs",
+  "exports": {
+    ".": "./dist/start.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc --noEmit && tsdown",
+    "dev": "tsdown --watch --no-clean --onSuccess \"node .\"",
+    "start": "node .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check:lint": "oxlint --max-warnings=0 .",
+    "check:types": "tsc --noEmit",
+    "check:format": "oxfmt --check .",
+    "fix:lint": "oxlint --fix .",
+    "fix:format": "oxfmt .",
+    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "express": "catalog:",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@plane/typescript-config": "workspace:*",
+    "@types/express": "4.17.23",
+    "@types/node": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "^4.0.8"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "extends": "@plane/typescript-config/node-library.json",
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": false
+  },
+  "include": ["src", "tests"],
+  "exclude": ["node_modules", "dist"]
+}
