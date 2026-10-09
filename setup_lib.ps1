@@ -104,7 +104,7 @@ $env:LC_CTYPE = "C"
 
 Write-Status "Setting up environment files..." Yellow
 
-$services = @("", "web", "api", "space", "admin", "live")
+$services = @("", "web", "api", "space", "admin", "live", "mcp")
 $success = $true
 
 foreach ($service in $services) {

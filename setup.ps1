@@ -374,6 +374,12 @@ function Build-LocalImages {
             Tags = @("plane-live")
             Context = $script:RepoRoot
             Dockerfile = Join-Path $script:RepoRoot "apps\live\Dockerfile.live"
+        },
+        @{
+            Name = "mcp"
+            Tags = @("plane-mcp")
+            Context = $script:RepoRoot
+            Dockerfile = Join-Path $script:RepoRoot "apps\mcp\Dockerfile.mcp"
         }
     )
 

@@ -14,8 +14,8 @@
   },
   "scripts": {
     "build": "tsc --noEmit && tsdown",
-    "dev": "tsdown --watch --no-clean --onSuccess \"node .\"",
-    "start": "node .",
+    "dev": "tsdown --watch --no-clean --onSuccess \"node --env-file-if-exists=.env .\"",
+    "start": "node --env-file-if-exists=.env .",
     "test": "vitest run",
     "test:watch": "vitest",
     "check:lint": "oxlint --max-warnings=0 .",

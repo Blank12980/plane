@@ -77,6 +77,21 @@ server {
         proxy_pass http://plane_upstream;
     }
 
+    # --- MCP server for AI agents (Streamable HTTP, may answer with SSE) -----
+    # No buffering so streamed responses reach the client immediately, and a
+    # long read timeout for slow tool calls.
+    location /mcp {
+        include /etc/nginx/conf.d/plane-proxy-params.inc;
+
+        proxy_buffering    off;
+        proxy_cache        off;
+        gzip               off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+
+        proxy_pass http://plane_upstream;
+    }
+
     # --- MinIO object storage ------------------------------------------------
     # Prefix match without a trailing slash on purpose: the API issues presigned
     # POSTs to the bucket root (/${BUCKET_NAME}) and presigned GETs to
