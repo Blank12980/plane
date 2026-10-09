@@ -24,13 +24,23 @@ from rest_framework.generics import GenericAPIView
 # Module imports
 from plane.db.models.api import APIToken
 from plane.api.middleware.api_authentication import APIKeyAuthentication
-from plane.api.rate_limit import ApiKeyRateThrottle, ServiceTokenRateThrottle
+from plane.api.rate_limit import ApiKeyRateThrottle, ServiceTokenRateThrottle, TokenRateThrottle
+from plane.api.permissions import TokenScopePermission, TokenWorkspacePermission
 from plane.utils.exception_logger import log_exception
 from plane.utils.paginator import BasePaginator
 from plane.utils.core.mixins import ReadReplicaControlMixin
 
 
 logger = logging.getLogger("plane.api")
+
+
+def check_token_permissions(view, request):
+    """Token restrictions (workspace binding, scopes) are checked before the view's own role
+    based permissions, even when a view overrides ``get_permissions``. They can only narrow
+    access down."""
+    for permission in (TokenWorkspacePermission(), TokenScopePermission()):
+        if not permission.has_permission(request, view):
+            view.permission_denied(request, message=permission.message, code=None)
 
 
 class TimezoneMixin:
@@ -59,15 +69,26 @@ class BaseAPIView(TimezoneMixin, GenericAPIView, ReadReplicaControlMixin, BasePa
             queryset = backend().filter_queryset(self.request, queryset, self)
         return queryset
 
+    def check_permissions(self, request):
+        check_token_permissions(self, request)
+        super().check_permissions(request)
+
     def get_throttles(self):
         throttle_classes = []
+        api_token = getattr(self.request, "api_token", None)
         api_key = self.request.headers.get("X-Api-Key")
 
-        if api_key:
-            service_token = APIToken.objects.filter(token=api_key, is_service=True).first()
+        if api_token is None and api_key:
+            api_token = APIToken.objects.filter(token=api_key).first()
 
-            if service_token:
+        if api_token is not None:
+            if api_token.is_service:
                 throttle_classes.append(ServiceTokenRateThrottle())
+                return throttle_classes
+
+            token_throttle = TokenRateThrottle.for_token(api_token)
+            if token_throttle is not None:
+                throttle_classes.append(token_throttle)
                 return throttle_classes
 
         throttle_classes.append(ApiKeyRateThrottle())
@@ -172,6 +193,10 @@ class BaseViewSet(TimezoneMixin, ReadReplicaControlMixin, ModelViewSet, BasePagi
         IsAuthenticated,
     ]
     use_read_replica = False
+
+    def check_permissions(self, request):
+        check_token_permissions(self, request)
+        super().check_permissions(request)
 
     def get_queryset(self):
         try:
