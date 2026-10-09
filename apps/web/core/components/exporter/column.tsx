@@ -79,7 +79,7 @@ export const useExportColumns = () => {
       tdRender: (rowData: RowData) => (
         <span className="text-13">
           {t(
-            `workspace_settings.settings.exports.layouts.${rowData.name === "module_task_status" ? rowData.name : "full"}`
+            `workspace_settings.settings.exports.layouts.${["module_task_status", "task_deadline", "task_hours"].includes(rowData.name ?? "") ? rowData.name : "full"}`
           )}
         </span>
       ),

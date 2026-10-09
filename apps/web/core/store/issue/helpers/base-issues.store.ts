@@ -559,6 +559,7 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
     shouldSync = true
   ) {
     // Store Before state of the issue
+    if ("target_date" in data && !("deadline_at" in data)) data = { ...data, deadline_at: null };
     const issueBeforeUpdate = clone(this.rootIssueStore.issues.getIssueById(issueId));
     try {
       // Update the Respective Stores
@@ -758,7 +759,12 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
     projectId?: string
   ) {
     if (!projectId) return;
-    const issueDatesBeforeChange: { id: string; start_date?: string; target_date?: string }[] = [];
+    const issueDatesBeforeChange: {
+      id: string;
+      start_date?: string;
+      target_date?: string;
+      deadline_at?: string | null;
+    }[] = [];
     try {
       const getIssueById = this.rootIssueStore.issues.getIssueById;
       runInAction(() => {
@@ -774,6 +780,7 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
               id: update.id,
               start_date: currIssue.start_date ?? undefined,
               target_date: currIssue.target_date ?? undefined,
+              deadline_at: currIssue.deadline_at,
             });
           }
 
@@ -785,7 +792,7 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
     } catch (e) {
       runInAction(() => {
         for (const update of issueDatesBeforeChange) {
-          const dates: Partial<TIssue> = {};
+          const dates: Partial<TIssue> = { deadline_at: update.deadline_at };
           if (update.start_date) dates.start_date = update.start_date;
           if (update.target_date) dates.target_date = update.target_date;
 

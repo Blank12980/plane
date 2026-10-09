@@ -7,6 +7,7 @@ import uuid
 
 # Django imports
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.http import HttpResponseRedirect
 from django.utils import timezone
 from django.db import IntegrityError
@@ -18,7 +19,7 @@ from rest_framework.permissions import AllowAny
 
 # Module imports
 from ..base import BaseAPIView
-from plane.db.models import FileAsset, Workspace, Project, User
+from plane.db.models import FileAsset, Workspace, WorkspaceMember, WorkspaceTag, Project, User
 from plane.settings.storage import S3Storage
 from plane.app.permissions import allow_permission, ROLE
 from plane.utils.cache import invalidate_cache_directly
@@ -210,6 +211,10 @@ class WorkspaceFileAssetEndpoint(BaseAPIView):
         if entity_type == FileAsset.EntityTypeContext.PROJECT_COVER:
             return {"project_id": entity_id}
 
+        # Tag Image (a tag has no foreign key on the asset, it is referenced by identifier)
+        if entity_type == FileAsset.EntityTypeContext.TAG_IMAGE:
+            return {"entity_identifier": str(entity_id)}
+
         # User Avatar and Cover
         if entity_type in [
             FileAsset.EntityTypeContext.USER_AVATAR,
@@ -235,6 +240,23 @@ class WorkspaceFileAssetEndpoint(BaseAPIView):
         ]:
             return {"comment_id": entity_id}
         return {}
+
+    def forbid_tag_image_access(self, request, slug, entity_type):
+        """Tag images are managed from workspace settings, so only workspace admins may touch them."""
+        if entity_type != FileAsset.EntityTypeContext.TAG_IMAGE:
+            return None
+        is_admin = WorkspaceMember.objects.filter(
+            member=request.user,
+            workspace__slug=slug,
+            role=ROLE.ADMIN.value,
+            is_active=True,
+        ).exists()
+        if is_admin:
+            return None
+        return Response(
+            {"error": "You don't have the required permissions."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
 
     def asset_delete(self, asset_id):
         asset = FileAsset.objects.filter(id=asset_id).first()
@@ -283,6 +305,18 @@ class WorkspaceFileAssetEndpoint(BaseAPIView):
             project.cover_image_asset_id = asset_id
             project.save()
             return
+
+        # Tag Image
+        elif entity_type == FileAsset.EntityTypeContext.TAG_IMAGE:
+            tag = WorkspaceTag.objects.filter(id=asset.entity_identifier, workspace_id=asset.workspace_id).first()
+            if tag is None:
+                return
+            # Delete the previous image
+            if tag.image_asset_id:
+                self.asset_delete(tag.image_asset_id)
+            tag.image_asset_id = asset_id
+            tag.save(update_fields=["image_asset", "updated_at"])
+            return
         else:
             return
 
@@ -311,6 +345,12 @@ class WorkspaceFileAssetEndpoint(BaseAPIView):
             project.cover_image_asset_id = None
             project.save()
             return
+        # Tag Image
+        elif entity_type == FileAsset.EntityTypeContext.TAG_IMAGE:
+            WorkspaceTag.objects.filter(
+                id=asset.entity_identifier, workspace_id=asset.workspace_id, image_asset_id=asset.id
+            ).update(image_asset=None)
+            return
         else:
             return
 
@@ -327,6 +367,19 @@ class WorkspaceFileAssetEndpoint(BaseAPIView):
                 {"error": "Invalid entity type.", "status": False},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        forbidden = self.forbid_tag_image_access(request, slug, entity_type)
+        if forbidden:
+            return forbidden
+
+        # A tag image can only be attached to an existing tag of this workspace
+        if entity_type == FileAsset.EntityTypeContext.TAG_IMAGE:
+            try:
+                tag_exists = WorkspaceTag.objects.filter(id=entity_identifier, workspace__slug=slug).exists()
+            except (ValueError, TypeError, ValidationError):
+                tag_exists = False
+            if not tag_exists:
+                return Response({"error": "Tag not found.", "status": False}, status=status.HTTP_404_NOT_FOUND)
 
         # Check if the file type is allowed
         allowed_types = [
@@ -382,6 +435,9 @@ class WorkspaceFileAssetEndpoint(BaseAPIView):
     def patch(self, request, slug, asset_id):
         # get the asset id
         asset = FileAsset.objects.get(id=asset_id, workspace__slug=slug)
+        forbidden = self.forbid_tag_image_access(request, slug, asset.entity_type)
+        if forbidden:
+            return forbidden
         # get the storage metadata
         asset.is_uploaded = True
         # get the storage metadata
@@ -402,6 +458,9 @@ class WorkspaceFileAssetEndpoint(BaseAPIView):
 
     def delete(self, request, slug, asset_id):
         asset = FileAsset.objects.get(id=asset_id, workspace__slug=slug)
+        forbidden = self.forbid_tag_image_access(request, slug, asset.entity_type)
+        if forbidden:
+            return forbidden
         asset.is_deleted = True
         asset.deleted_at = timezone.now()
         # get the entity and save the asset id for the request field
@@ -454,6 +513,7 @@ class StaticFileAssetEndpoint(BaseAPIView):
             FileAsset.EntityTypeContext.USER_COVER,
             FileAsset.EntityTypeContext.WORKSPACE_LOGO,
             FileAsset.EntityTypeContext.PROJECT_COVER,
+            FileAsset.EntityTypeContext.TAG_IMAGE,
         ]:
             return Response(
                 {"error": "Invalid entity type.", "status": False},

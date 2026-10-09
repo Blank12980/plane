@@ -18,6 +18,12 @@ export interface IIssueStoreActions {
   // actions
   fetchIssue: (workspaceSlug: string, projectId: string, issueId: string) => Promise<TIssue>;
   updateIssue: (workspaceSlug: string, projectId: string, issueId: string, data: Partial<TIssue>) => Promise<void>;
+  updateDeadline: (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    deadlineAt: string | null
+  ) => Promise<void>;
   removeIssue: (workspaceSlug: string, projectId: string, issueId: string) => Promise<void>;
   archiveIssue: (workspaceSlug: string, projectId: string, issueId: string) => Promise<void>;
   addCycleToIssue: (workspaceSlug: string, projectId: string, cycleId: string, issueId: string) => Promise<void>;
@@ -164,6 +170,7 @@ export class IssueStore implements IIssueStore {
       start_date: issue?.start_date,
       target_date: issue?.target_date,
       completed_at: issue?.completed_at,
+      deadline_at: issue?.deadline_at,
       archived_at: issue?.archived_at,
       created_by: issue?.created_by,
       updated_by: issue?.updated_by,
@@ -188,6 +195,14 @@ export class IssueStore implements IIssueStore {
       currentStore.updateIssue(workspaceSlug, projectId, issueId, data),
       this.rootIssueDetailStore.activity.fetchActivities(workspaceSlug, projectId, issueId),
     ]);
+  };
+
+  updateDeadline = async (workspaceSlug: string, projectId: string, issueId: string, deadlineAt: string | null) => {
+    await this.issueService.patchIssue(workspaceSlug, projectId, issueId, { deadline_at: deadlineAt });
+    // Read the normalized timestamp from the API before adding it to shared state.
+    const issue = await this.issueService.retrieve(workspaceSlug, projectId, issueId);
+    this.addIssueToStore(issue);
+    await this.rootIssueDetailStore.activity.fetchActivities(workspaceSlug, projectId, issueId);
   };
 
   removeIssue = async (workspaceSlug: string, projectId: string, issueId: string) => {

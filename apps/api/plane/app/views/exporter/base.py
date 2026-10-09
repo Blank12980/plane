@@ -32,7 +32,7 @@ class ExportIssuesEndpoint(BaseAPIView):
         project_ids = request.data.get("project", [])
         layout = request.data.get("layout", "full")
 
-        if layout not in ["full", "module_task_status"]:
+        if layout not in ["full", "module_task_status", "task_deadline", "task_hours"]:
             return Response({"error": "Invalid export layout."}, status=status.HTTP_400_BAD_REQUEST)
 
         if provider in ["csv", "xlsx", "json"]:
@@ -45,7 +45,7 @@ class ExportIssuesEndpoint(BaseAPIView):
                 ).values_list("id", flat=True)
                 project_ids = [str(project_id) for project_id in project_ids]
 
-            if layout == "module_task_status":
+            if layout in ["module_task_status", "task_deadline", "task_hours"]:
                 if not isinstance(project_ids, list):
                     return Response({"error": "Project must be a list."}, status=status.HTTP_400_BAD_REQUEST)
                 try:
@@ -85,6 +85,7 @@ class ExportIssuesEndpoint(BaseAPIView):
                 multiple=multiple,
                 slug=slug,
                 layout=layout,
+                export_timezone=request.user.user_timezone,
             )
             return Response(
                 {"message": "Once the export is ready you will be able to download it"},

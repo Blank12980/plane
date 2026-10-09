@@ -66,6 +66,8 @@ from .workspace.invite import (
     UserWorkspaceInvitationsViewSet,
 )
 from .workspace.label import WorkspaceLabelsEndpoint
+
+from .workspace.tag import WorkspaceTagEndpoint
 from .workspace.state import WorkspaceStatesEndpoint
 from .workspace.user import (
     UserLastProjectWithWorkspaceEndpoint,
@@ -145,6 +147,10 @@ from .issue.comment_attachment import CommentAttachmentV2Endpoint
 from .issue.label import LabelViewSet, BulkCreateIssueLabelsEndpoint
 
 from .issue.link import IssueLinkViewSet
+
+from .issue.tag import IssueTagEndpoint
+
+from .issue.worklog import IssueWorkLogEndpoint
 
 from .issue.relation import IssueRelationViewSet
 

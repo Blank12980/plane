@@ -32,6 +32,7 @@ from plane.utils.content_validator import (
 )
 
 from .base import BaseSerializer
+from plane.utils.issue_dates import validate_issue_dates
 from .cycle import CycleLiteSerializer, CycleSerializer
 from .module import ModuleLiteSerializer, ModuleSerializer
 from .state import StateLiteSerializer
@@ -72,6 +73,7 @@ class IssueSerializer(BaseSerializer):
         exclude = ["description_json", "description_stripped"]
 
     def validate(self, data):
+        validate_issue_dates(data, self.instance)
         if (
             data.get("start_date", None) is not None
             and data.get("target_date", None) is not None

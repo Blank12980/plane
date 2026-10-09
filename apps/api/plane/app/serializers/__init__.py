@@ -83,6 +83,10 @@ from .issue import (
     IssueListDetailSerializer,
 )
 
+from .tag import WorkspaceTagSerializer
+
+from .worklog import IssueWorkLogSerializer
+
 from .module import (
     ModuleDetailSerializer,
     ModuleWriteSerializer,

@@ -20,7 +20,7 @@ export class ProjectExportService extends APIService {
       provider: string;
       project: string[];
       multiple?: boolean;
-      layout?: "full" | "module_task_status";
+      layout?: "full" | "module_task_status" | "task_deadline" | "task_hours";
       rich_filters?: TWorkItemFilterExpression;
     }
   ): Promise<any> {

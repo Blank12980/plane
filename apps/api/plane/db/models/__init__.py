@@ -102,6 +102,10 @@ from .recent_visit import UserRecentVisit
 
 from .label import Label
 
+from .tag import WorkspaceTag, IssueTag
+
+from .worklog import IssueWorkLog
+
 from .device import Device, DeviceSession
 
 from .sticky import Sticky

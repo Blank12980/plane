@@ -13,6 +13,7 @@ from rest_framework import serializers
 
 # Module imports
 from .base import BaseSerializer, DynamicBaseSerializer
+from plane.utils.issue_dates import validate_issue_dates
 from .user import UserLiteSerializer
 from .state import StateLiteSerializer
 from .project import ProjectLiteSerializer
@@ -62,6 +63,7 @@ class IssueFlatSerializer(BaseSerializer):
             "priority",
             "start_date",
             "target_date",
+            "deadline_at",
             "sequence_id",
             "sort_order",
             "is_draft",
@@ -121,6 +123,7 @@ class IssueCreateSerializer(BaseSerializer):
         return data
 
     def validate(self, attrs):
+        validate_issue_dates(attrs, self.instance)
         allow_triage = self.context.get("allow_triage_state", False)
         state_manager = State.triage_objects if allow_triage else State.objects
 
@@ -826,6 +829,7 @@ class IssueSerializer(DynamicBaseSerializer):
             "priority",
             "start_date",
             "target_date",
+            "deadline_at",
             "sequence_id",
             "project_id",
             "parent_id",
@@ -883,6 +887,7 @@ class IssueListDetailSerializer(serializers.Serializer):
             "priority": instance.priority,
             "start_date": instance.start_date,
             "target_date": instance.target_date,
+            "deadline_at": instance.deadline_at,
             "sequence_id": instance.sequence_id,
             "project_id": instance.project_id,
             "parent_id": instance.parent_id,
@@ -998,6 +1003,7 @@ class IssuePublicSerializer(BaseSerializer):
             "workspace",
             "priority",
             "target_date",
+            "deadline_at",
             "reactions",
             "votes",
         ]
@@ -1026,6 +1032,7 @@ class IssueVersionDetailSerializer(BaseSerializer):
             "priority",
             "start_date",
             "target_date",
+            "deadline_at",
             "assignees",
             "sequence_id",
             "labels",

@@ -4,6 +4,7 @@
  * See the LICENSE file for details.
  */
 
+import { Tag } from "lucide-react";
 import { observer } from "mobx-react";
 // i18n
 import { useTranslation } from "@plane/i18n";
@@ -21,8 +22,10 @@ import {
   EstimatePropertyIcon,
   ParentPropertyIcon,
 } from "@plane/propel/icons";
-import { cn, getDate, renderFormattedPayloadDate, shouldHighlightIssueDueDate } from "@plane/utils";
+import { cn, getDate, getDeadlineParts, renderFormattedPayloadDate, shouldHighlightIssueDueDate } from "@plane/utils";
 // components
+import { IssueDeadlineTime } from "@/components/issues/issue-detail/deadline-time";
+import { useUser } from "@/hooks/store/user";
 import { DateDropdown } from "@/components/dropdowns/date";
 import { EstimateDropdown } from "@/components/dropdowns/estimate";
 import { ButtonAvatars } from "@/components/dropdowns/member/avatar";
@@ -46,6 +49,7 @@ import { SidebarPropertyListItem } from "@/components/common/layout/sidebar/prop
 import { IssueCycleSelect } from "./cycle-select";
 import { IssueLabel } from "./label";
 import { IssueModuleSelect } from "./module-select";
+import { IssueTagSelect } from "./tag-select";
 import type { TIssueOperations } from "./root";
 
 type Props = {
@@ -58,6 +62,7 @@ type Props = {
 
 export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: Props) {
   const { t } = useTranslation();
+  const { data: currentUser } = useUser();
   const { workspaceSlug, projectId, issueId, issueOperations, isEditable } = props;
   // store hooks
   const { getProjectById } = useProject();
@@ -76,10 +81,14 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
   const projectDetails = getProjectById(issue.project_id);
   const stateDetails = getStateById(issue.state_id);
 
+  const deadlineDate = issue.deadline_at
+    ? (getDeadlineParts(issue.deadline_at, currentUser?.user_timezone ?? "UTC")?.date ?? issue.target_date)
+    : issue.target_date;
+
   const minDate = issue.start_date ? getDate(issue.start_date) : null;
   minDate?.setDate(minDate.getDate());
 
-  const maxDate = issue.target_date ? getDate(issue.target_date) : null;
+  const maxDate = issue.target_date ? getDate(deadlineDate) : null;
   maxDate?.setDate(maxDate.getDate());
 
   return (
@@ -166,10 +175,11 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
               <div className="flex w-full items-center gap-2">
                 <DateDropdown
                   placeholder={t("issue.add.due_date")}
-                  value={issue.target_date}
+                  value={deadlineDate}
                   onChange={(val) =>
                     issueOperations.update(workspaceSlug, projectId, issueId, {
                       target_date: val ? renderFormattedPayloadDate(val) : null,
+                      deadline_at: null,
                     })
                   }
                   minDate={minDate ?? undefined}
@@ -187,6 +197,13 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
                 {issue.target_date && <DateAlert date={issue.target_date} workItem={issue} projectId={projectId} />}
               </div>
             </SidebarPropertyListItem>
+
+            <IssueDeadlineTime
+              workspaceSlug={workspaceSlug}
+              projectId={projectId}
+              issueId={issueId}
+              disabled={!isEditable}
+            />
 
             {projectId && areEstimateEnabledByProjectId(projectId) && (
               <SidebarPropertyListItem icon={EstimatePropertyIcon} label={t("common.estimate")}>
@@ -252,6 +269,15 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
 
             <SidebarPropertyListItem icon={LabelPropertyIcon} label={t("common.labels")}>
               <IssueLabel
+                workspaceSlug={workspaceSlug}
+                projectId={projectId}
+                issueId={issueId}
+                disabled={!isEditable}
+              />
+            </SidebarPropertyListItem>
+
+            <SidebarPropertyListItem icon={Tag} label={t("tags.label")}>
+              <IssueTagSelect
                 workspaceSlug={workspaceSlug}
                 projectId={projectId}
                 issueId={issueId}

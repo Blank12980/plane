@@ -277,6 +277,9 @@ export abstract class IssueDetail implements IIssueDetail {
     this.issue.fetchIssueWithIdentifier(workspaceSlug, projectIdentifier, sequenceId);
   updateIssue = async (workspaceSlug: string, projectId: string, issueId: string, data: Partial<TIssue>) =>
     this.issue.updateIssue(workspaceSlug, projectId, issueId, data);
+
+  updateDeadline = async (workspaceSlug: string, projectId: string, issueId: string, deadlineAt: string | null) =>
+    this.issue.updateDeadline(workspaceSlug, projectId, issueId, deadlineAt);
   removeIssue = async (workspaceSlug: string, projectId: string, issueId: string) =>
     this.issue.removeIssue(workspaceSlug, projectId, issueId);
   archiveIssue = async (workspaceSlug: string, projectId: string, issueId: string) =>

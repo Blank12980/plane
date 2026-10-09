@@ -620,6 +620,15 @@ class IssueDetailAPIEndpoint(BaseAPIView):
                     # If the serializer is valid, save the issue and dispatch
                     # the update issue activity worker event.
                     serializer.save()
+                    if "deadline_at" in request.data or "target_date" in request.data:
+                        requested_data = json.dumps(
+                            {
+                                **request.data,
+                                "target_date": serializer.data["target_date"],
+                                "deadline_at": serializer.data["deadline_at"],
+                            },
+                            cls=DjangoJSONEncoder,
+                        )
                     issue_activity.delay(
                         type="issue.activity.updated",
                         requested_data=requested_data,

@@ -4,6 +4,7 @@
  * See the LICENSE file for details.
  */
 
+import { Tag } from "lucide-react";
 import { observer } from "mobx-react";
 // i18n
 import { useTranslation } from "@plane/i18n";
@@ -21,8 +22,10 @@ import {
   EstimatePropertyIcon,
   ParentPropertyIcon,
 } from "@plane/propel/icons";
-import { cn, getDate, renderFormattedPayloadDate, shouldHighlightIssueDueDate } from "@plane/utils";
+import { cn, getDate, getDeadlineParts, renderFormattedPayloadDate, shouldHighlightIssueDueDate } from "@plane/utils";
 // components
+import { IssueDeadlineTime } from "@/components/issues/issue-detail/deadline-time";
+import { useUser } from "@/hooks/store/user";
 import { DateDropdown } from "@/components/dropdowns/date";
 import { EstimateDropdown } from "@/components/dropdowns/estimate";
 import { ButtonAvatars } from "@/components/dropdowns/member/avatar";
@@ -45,6 +48,7 @@ import type { TIssueOperations } from "../issue-detail";
 import { IssueCycleSelect } from "../issue-detail/cycle-select";
 import { IssueLabel } from "../issue-detail/label";
 import { IssueModuleSelect } from "../issue-detail/module-select";
+import { IssueTagSelect } from "../issue-detail/tag-select";
 
 interface IPeekOverviewProperties {
   workspaceSlug: string;
@@ -57,6 +61,7 @@ interface IPeekOverviewProperties {
 export const PeekOverviewProperties = observer(function PeekOverviewProperties(props: IPeekOverviewProperties) {
   const { workspaceSlug, projectId, issueId, issueOperations, disabled } = props;
   const { t } = useTranslation();
+  const { data: currentUser } = useUser();
   // store hooks
   const { getProjectById } = useProject();
   const {
@@ -72,10 +77,14 @@ export const PeekOverviewProperties = observer(function PeekOverviewProperties(p
   const isEstimateEnabled = projectDetails?.estimate;
   const stateDetails = getStateById(issue.state_id);
 
+  const deadlineDate = issue.deadline_at
+    ? (getDeadlineParts(issue.deadline_at, currentUser?.user_timezone ?? "UTC")?.date ?? issue.target_date)
+    : issue.target_date;
+
   const minDate = getDate(issue.start_date);
   minDate?.setDate(minDate.getDate());
 
-  const maxDate = getDate(issue.target_date);
+  const maxDate = getDate(deadlineDate);
   maxDate?.setDate(maxDate.getDate());
 
   return (
@@ -166,10 +175,11 @@ export const PeekOverviewProperties = observer(function PeekOverviewProperties(p
         <SidebarPropertyListItem icon={DueDatePropertyIcon} label={t("common.order_by.due_date")}>
           <div className="flex w-full items-center gap-2">
             <DateDropdown
-              value={issue.target_date}
+              value={deadlineDate}
               onChange={(val) =>
                 issueOperations.update(workspaceSlug, projectId, issueId, {
                   target_date: val ? renderFormattedPayloadDate(val) : null,
+                  deadline_at: null,
                 })
               }
               placeholder={t("issue.add.due_date")}
@@ -188,6 +198,8 @@ export const PeekOverviewProperties = observer(function PeekOverviewProperties(p
             {issue.target_date && <DateAlert date={issue.target_date} workItem={issue} projectId={projectId} />}
           </div>
         </SidebarPropertyListItem>
+
+        <IssueDeadlineTime workspaceSlug={workspaceSlug} projectId={projectId} issueId={issueId} disabled={disabled} />
 
         {isEstimateEnabled && (
           <SidebarPropertyListItem icon={EstimatePropertyIcon} label={t("common.estimate")}>
@@ -251,6 +263,10 @@ export const PeekOverviewProperties = observer(function PeekOverviewProperties(p
 
         <SidebarPropertyListItem icon={LabelPropertyIcon} label={t("common.labels")}>
           <IssueLabel workspaceSlug={workspaceSlug} projectId={projectId} issueId={issueId} disabled={disabled} />
+        </SidebarPropertyListItem>
+
+        <SidebarPropertyListItem icon={Tag} label={t("tags.label")}>
+          <IssueTagSelect workspaceSlug={workspaceSlug} projectId={projectId} issueId={issueId} disabled={disabled} />
         </SidebarPropertyListItem>
 
         <IssueWorklogProperty

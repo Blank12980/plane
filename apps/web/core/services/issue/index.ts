@@ -15,3 +15,4 @@ export * from "./comment_attachment.service";
 export * from "./issue_relation.service";
 export * from "./work_item_version.service";
 export * from "./workspace_draft.service";
+export * from "./issue_worklog.service";

@@ -169,6 +169,7 @@ class IssueListEndpoint(BaseAPIView):
                 "priority",
                 "start_date",
                 "target_date",
+                "deadline_at",
                 "sequence_id",
                 "project_id",
                 "parent_id",
@@ -434,6 +435,7 @@ class IssueViewSet(BaseViewSet):
                     "priority",
                     "start_date",
                     "target_date",
+                    "deadline_at",
                     "sequence_id",
                     "project_id",
                     "parent_id",
@@ -667,6 +669,15 @@ class IssueViewSet(BaseViewSet):
         serializer = IssueCreateSerializer(issue, data=request.data, partial=True, context={"project_id": project_id})
         if serializer.is_valid():
             serializer.save()
+            if "deadline_at" in request.data or "target_date" in request.data:
+                requested_data = json.dumps(
+                    {
+                        **request.data,
+                        "target_date": serializer.data["target_date"],
+                        "deadline_at": serializer.data["deadline_at"],
+                    },
+                    cls=DjangoJSONEncoder,
+                )
             # Check if the update is a migration description update
             is_migration_description_update = skip_activity and is_description_update
             # Log all the updates
@@ -866,6 +877,7 @@ class IssuePaginatedViewSet(BaseViewSet):
             "priority",
             "start_date",
             "target_date",
+            "deadline_at",
             "sequence_id",
             "project_id",
             "parent_id",
@@ -1118,7 +1130,7 @@ class IssueBulkUpdateDateEndpoint(BaseAPIView):
         epoch = int(timezone.now().timestamp())
 
         # Fetch all relevant issues in a single query
-        issues = list(Issue.objects.filter(id__in=issue_ids))
+        issues = list(Issue.objects.filter(id__in=issue_ids, project_id=project_id, workspace__slug=slug))
         issues_dict = {str(issue.id): issue for issue in issues}
         issues_to_update = []
 
@@ -1154,18 +1166,21 @@ class IssueBulkUpdateDateEndpoint(BaseAPIView):
             if target_date:
                 issue_activity.delay(
                     type="issue.activity.updated",
-                    requested_data=json.dumps({"target_date": update.get("target_date")}),
-                    current_instance=json.dumps({"target_date": str(issue.target_date)}),
+                    requested_data=json.dumps({"target_date": update.get("target_date"), "deadline_at": None}),
+                    current_instance=json.dumps(
+                        {"target_date": str(issue.target_date), "deadline_at": issue.deadline_at}, cls=DjangoJSONEncoder
+                    ),
                     issue_id=str(issue_id),
                     actor_id=str(request.user.id),
                     project_id=str(project_id),
                     epoch=epoch,
                 )
                 issue.target_date = target_date
+                issue.deadline_at = None
                 issues_to_update.append(issue)
 
         # Bulk update issues
-        Issue.objects.bulk_update(issues_to_update, ["start_date", "target_date"])
+        Issue.objects.bulk_update(issues_to_update, ["start_date", "target_date", "deadline_at"])
 
         return Response({"message": "Issues updated successfully"}, status=status.HTTP_200_OK)
 

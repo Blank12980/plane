@@ -16,14 +16,25 @@ from celery import shared_task
 # Django imports
 from django.conf import settings
 from django.utils import timezone
-from django.db.models import Prefetch
+from django.db.models import OuterRef, Prefetch, Subquery, Sum
+from django.db.models.functions import Coalesce
 
 # Module imports
-from plane.db.models import ExporterHistory, Issue, IssueComment, IssueRelation, IssueSubscriber, ModuleIssue
+from plane.db.models import (
+    ExporterHistory,
+    Issue,
+    IssueComment,
+    IssueRelation,
+    IssueSubscriber,
+    IssueWorkLog,
+    ModuleIssue,
+)
 from plane.utils.exception_logger import log_exception
 from plane.utils.porters.exporter import DataExporter
 from plane.utils.porters.serializers.issue import IssueExportSerializer
 from plane.utils.porters.serializers.module_task_status import ModuleTaskStatusExportSerializer
+from plane.utils.porters.serializers.task_deadline import TaskDeadlineExportSerializer, DEADLINE_HEADERS
+from plane.utils.porters.serializers.task_hours import TaskHoursExportSerializer, HOURS_HEADERS
 
 
 def create_zip_file(files: List[tuple[str, str | bytes]]) -> io.BytesIO:
@@ -134,6 +145,7 @@ def issue_export_task(
     multiple: bool,
     slug: str,
     layout: str = "full",
+    export_timezone: str = "UTC",
 ):
     """
     Export issues from the workspace.
@@ -169,6 +181,24 @@ def issue_export_task(
                 )
             ).order_by("project__name", "sequence_id", "id")
             serializer_class = ModuleTaskStatusExportSerializer
+            multiple = True
+        elif layout == "task_deadline":
+            workspace_issues = workspace_issues.order_by("project__name", "sequence_id", "id")
+            serializer_class = TaskDeadlineExportSerializer
+            multiple = True
+        elif layout == "task_hours":
+            # A subquery keeps one row per task regardless of how many work logs it has.
+            logged_minutes = (
+                IssueWorkLog.objects.filter(issue_id=OuterRef("pk"))
+                .order_by()
+                .values("issue_id")
+                .annotate(total=Sum("duration_minutes"))
+                .values("total")
+            )
+            workspace_issues = workspace_issues.annotate(logged_minutes=Coalesce(Subquery(logged_minutes), 0)).order_by(
+                "project__name", "sequence_id", "id"
+            )
+            serializer_class = TaskHoursExportSerializer
             multiple = True
         else:
             workspace_issues = workspace_issues.select_related(
@@ -209,7 +239,16 @@ def issue_export_task(
             exporter = DataExporter(
                 serializer_class,
                 format_type=provider,
-                headers=["Модуль", "Задача", "Статус"] if layout == "module_task_status" else None,
+                headers=(
+                    ["Модуль", "Задача", "Статус"]
+                    if layout == "module_task_status"
+                    else DEADLINE_HEADERS
+                    if layout == "task_deadline"
+                    else HOURS_HEADERS
+                    if layout == "task_hours"
+                    else None
+                ),
+                context={"export_timezone": export_timezone},
             )
         except ValueError as e:
             # Invalid format type
@@ -224,7 +263,11 @@ def issue_export_task(
             # Export each project separately with its own queryset
             for project_id in project_ids:
                 project_issues = workspace_issues.filter(project_id=project_id)
-                suffix = "-module-task-status" if layout == "module_task_status" else ""
+                suffix = {
+                    "module_task_status": "-module-task-status",
+                    "task_deadline": "-task-deadline",
+                    "task_hours": "-task-hours",
+                }.get(layout, "")
                 export_filename = f"{slug}-{project_id}{suffix}"
                 filename, content = exporter.export(export_filename, project_issues)
                 files.append((filename, content))

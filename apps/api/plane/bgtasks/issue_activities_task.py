@@ -257,6 +257,26 @@ def track_target_date(
 
 
 # Track changes in issue start date
+def track_deadline_at(
+    requested_data, current_instance, issue_id, project_id, workspace_id, actor_id, issue_activities, epoch
+):
+    if current_instance.get("deadline_at") != requested_data.get("deadline_at"):
+        issue_activities.append(
+            IssueActivity(
+                issue_id=issue_id,
+                actor_id=actor_id,
+                verb="updated",
+                old_value=current_instance.get("deadline_at") or "",
+                new_value=requested_data.get("deadline_at") or "",
+                field="deadline_at",
+                project_id=project_id,
+                workspace_id=workspace_id,
+                comment="updated the deadline to",
+                epoch=epoch,
+            )
+        )
+
+
 def track_start_date(
     requested_data,
     current_instance,
@@ -608,6 +628,7 @@ def update_issue_activity(
         "state_id": track_state,
         "description_html": track_description,
         "target_date": track_target_date,
+        "deadline_at": track_deadline_at,
         "start_date": track_start_date,
         "label_ids": track_labels,
         "assignee_ids": track_assignees,

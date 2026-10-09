@@ -43,6 +43,8 @@ import type { IIssueRootStore } from "./issue/root.store";
 import { IssueRootStore } from "./issue/root.store";
 import type { ILabelStore } from "./label.store";
 import { LabelStore } from "./label.store";
+import type { IWorkspaceTagStore } from "./workspace-tag.store";
+import { WorkspaceTagStore } from "./workspace-tag.store";
 import type { IMailStore } from "./mail";
 import { MailStore } from "./mail";
 import type { IMemberRootStore } from "./member";
@@ -86,6 +88,7 @@ export class CoreRootStore {
   issue: IIssueRootStore;
   state: IStateStore;
   label: ILabelStore;
+  workspaceTag: IWorkspaceTagStore;
   mail: IMailStore;
   dashboard: IDashboardStore;
   analytics: IAnalyticsStore;
@@ -123,6 +126,7 @@ export class CoreRootStore {
     this.issue = new IssueRootStore(this as unknown as RootStore);
     this.state = new StateStore(this as unknown as RootStore);
     this.label = new LabelStore(this);
+    this.workspaceTag = new WorkspaceTagStore();
     this.mail = new MailStore();
     this.dashboard = new DashboardStore(this);
     this.multipleSelect = new MultipleSelectStore();
@@ -158,6 +162,7 @@ export class CoreRootStore {
     this.issue = new IssueRootStore(this as unknown as RootStore);
     this.state = new StateStore(this as unknown as RootStore);
     this.label = new LabelStore(this);
+    this.workspaceTag = new WorkspaceTagStore();
     this.mail = new MailStore();
     this.dashboard = new DashboardStore(this);
     this.projectInbox = new ProjectInboxStore(this);

@@ -40,6 +40,7 @@ class FileAsset(BaseModel):
         USER_AVATAR = "USER_AVATAR"
         WORKSPACE_LOGO = "WORKSPACE_LOGO"
         PROJECT_COVER = "PROJECT_COVER"
+        TAG_IMAGE = "TAG_IMAGE"
         DRAFT_ISSUE_ATTACHMENT = "DRAFT_ISSUE_ATTACHMENT"
         DRAFT_ISSUE_DESCRIPTION = "DRAFT_ISSUE_DESCRIPTION"
 
@@ -84,6 +85,7 @@ class FileAsset(BaseModel):
             or self.entity_type == self.EntityTypeContext.USER_AVATAR
             or self.entity_type == self.EntityTypeContext.USER_COVER
             or self.entity_type == self.EntityTypeContext.PROJECT_COVER
+            or self.entity_type == self.EntityTypeContext.TAG_IMAGE
         ):
             return f"/api/assets/v2/static/{self.id}/"
 

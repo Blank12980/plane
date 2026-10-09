@@ -54,9 +54,9 @@ class DataExporter:
 
         # Apply format-specific options
         if format_type == "xlsx":
-            return formatter_class(list_joiner=", ", headers=self.headers)
+            return formatter_class(list_joiner=", ", headers=self.headers, prettify_headers=self.headers is None)
         if format_type == "csv":
-            return formatter_class(headers=self.headers)
+            return formatter_class(headers=self.headers, prettify_headers=self.headers is None)
         else:
             return formatter_class()
 

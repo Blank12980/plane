@@ -48,6 +48,7 @@ class IssueExportSerializer(IssueSerializer):
             "created_by_name",
             "start_date",
             "target_date",
+            "deadline_at",
             "completed_at",
             "created_at",
             "updated_at",

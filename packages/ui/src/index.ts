@@ -34,6 +34,7 @@ export * from "./tables";
 export * from "./tabs";
 export * from "./tag";
 export * from "./tooltip";
+export * from "./time-input";
 export * from "./typography";
 export * from "./utils";
 export * from "./oauth";

@@ -39,7 +39,7 @@ type FormData = {
   provider: (typeof EXPORTERS_LIST)[0];
   project: string[];
   multiple: boolean;
-  layout: "full" | "module_task_status";
+  layout: "full" | "module_task_status" | "task_deadline" | "task_hours";
   filters: TWorkItemFilterExpression;
 };
 
@@ -105,7 +105,7 @@ export const ExportForm = observer(function ExportForm(props: Props) {
       const payload = {
         provider: formData.provider.provider,
         project: formData.project,
-        multiple: formData.layout === "module_task_status" || formData.project.length > 1,
+        multiple: formData.layout !== "full" || formData.project.length > 1,
         layout: formData.layout,
         rich_filters: formData.filters,
       };
@@ -229,6 +229,12 @@ export const ExportForm = observer(function ExportForm(props: Props) {
                 >
                   <CustomSelect.Option value="full">
                     {t("workspace_settings.settings.exports.layouts.full")}
+                  </CustomSelect.Option>
+                  <CustomSelect.Option value="task_deadline">
+                    {t("workspace_settings.settings.exports.layouts.task_deadline")}
+                  </CustomSelect.Option>
+                  <CustomSelect.Option value="task_hours">
+                    {t("workspace_settings.settings.exports.layouts.task_hours")}
                   </CustomSelect.Option>
                   <CustomSelect.Option value="module_task_status">
                     {t("workspace_settings.settings.exports.layouts.module_task_status")}

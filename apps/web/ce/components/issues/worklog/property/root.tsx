@@ -4,6 +4,8 @@
  * See the LICENSE file for details.
  */
 
+import { IssueWorkLogProperty } from "@/components/issues/worklog/property";
+
 type TIssueWorklogProperty = {
   workspaceSlug: string;
   projectId: string;
@@ -11,6 +13,6 @@ type TIssueWorklogProperty = {
   disabled: boolean;
 };
 
-export function IssueWorklogProperty(_props: TIssueWorklogProperty) {
-  return <></>;
+export function IssueWorklogProperty(props: TIssueWorklogProperty) {
+  return <IssueWorkLogProperty {...props} />;
 }
