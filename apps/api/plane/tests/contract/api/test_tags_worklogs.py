@@ -64,7 +64,9 @@ def base(workspace):
 @pytest.mark.django_db
 class TestWorkspaceTagsAPI:
     def test_admin_creates_and_lists_tags(self, api_key_client, workspace):
-        created = api_key_client.post(f"{base(workspace)}/tags/", {"name": " Backend ", "color": "#112233"}, format="json")
+        created = api_key_client.post(
+            f"{base(workspace)}/tags/", {"name": " Backend ", "color": "#112233"}, format="json"
+        )
         assert created.status_code == status.HTTP_201_CREATED
         assert created.data["name"] == "Backend"
 
