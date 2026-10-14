@@ -23,6 +23,9 @@ export interface IPartialProject {
   sort_order: number | null;
   logo_props: TLogoProps;
   member_role?: TUserPermissions | EUserProjectRoles | null;
+  is_member?: boolean;
+  can_leave?: boolean;
+  has_admin_access?: boolean;
   archived_at: string | null;
   workspace: IWorkspace | string;
   cycle_view: boolean;
@@ -95,6 +98,8 @@ export interface IProjectMemberLite {
 export type TProjectMembership = {
   member: string;
   role: TUserPermissions | EUserProjectRoles;
+  can_leave?: boolean;
+  is_instance_admin_access?: boolean;
 } & (
   | {
       id: string;

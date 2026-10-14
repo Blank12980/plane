@@ -212,6 +212,8 @@ class ProjectSerializer(BaseSerializer):
     total_cycles = serializers.IntegerField(read_only=True)
     total_modules = serializers.IntegerField(read_only=True)
     is_member = serializers.BooleanField(read_only=True)
+    can_leave = serializers.BooleanField(read_only=True)
+    has_admin_access = serializers.BooleanField(read_only=True)
     sort_order = serializers.FloatField(read_only=True)
     member_role = serializers.IntegerField(read_only=True)
     is_deployed = serializers.BooleanField(read_only=True)

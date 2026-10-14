@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import BooleanField, Exists, OuterRef, Q, Subquery, Value
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.serializers import UUIDField
 
@@ -26,7 +26,10 @@ from plane.utils.core import set_use_read_replica
 
 
 def is_instance_admin(user):
-    return user.is_authenticated and InstanceAdmin.objects.filter(user=user, role__gte=INSTANCE_ADMIN_ROLE).exists()
+    return (
+        user.is_authenticated
+        and InstanceAdmin.objects.using("default").filter(user=user, role__gte=INSTANCE_ADMIN_ROLE).exists()
+    )
 
 
 def is_workspace_admin(user, slug):
@@ -35,7 +38,11 @@ def is_workspace_admin(user, slug):
     return (
         is_instance_admin(user)
         or WorkspaceMember.objects.filter(
-            workspace__slug=slug, member=user, role=ROLE.ADMIN.value, is_active=True
+            workspace__slug=slug,
+            member=user,
+            role=ROLE.ADMIN.value,
+            is_active=True,
+            is_instance_admin_access=False,
         ).exists()
     )
 
@@ -51,10 +58,14 @@ def projects_for_user(user, slug=None, *, include_public=False):
         return projects
 
     workspace_members = WorkspaceMember.objects.filter(
-        workspace_id=OuterRef("workspace_id"), member=user, is_active=True
+        workspace_id=OuterRef("workspace_id"), member=user, is_active=True, is_instance_admin_access=False
     )
     project_members = ProjectMember.objects.filter(
-        project_id=OuterRef("pk"), workspace_id=OuterRef("workspace_id"), member=user, is_active=True
+        project_id=OuterRef("pk"),
+        workspace_id=OuterRef("workspace_id"),
+        member=user,
+        is_active=True,
+        is_instance_admin_access=False,
     )
     projects = projects.alias(
         _active_workspace_member=Exists(workspace_members),
@@ -99,8 +110,31 @@ def has_project_role(user, slug, project_id, roles):
     if is_workspace_admin(user, slug):
         return True
     return ProjectMember.objects.filter(
-        workspace__slug=slug, project_id=project_id, member=user, is_active=True, role__in=roles
+        workspace__slug=slug,
+        project_id=project_id,
+        member=user,
+        is_active=True,
+        role__in=roles,
+        is_instance_admin_access=False,
     ).exists()
+
+
+def annotate_project_membership(projects, user, slug):
+    """Report explicit membership separately from administrative access."""
+    membership = ProjectMember.objects.filter(
+        workspace__slug=slug,
+        workspace_id=OuterRef("workspace_id"),
+        project_id=OuterRef("pk"),
+        member=user,
+        is_active=True,
+        is_instance_admin_access=False,
+    )
+    return projects.annotate(
+        member_role=Subquery(membership.values("role")[:1]),
+        is_member=Exists(membership),
+        can_leave=Exists(membership),
+        has_admin_access=Value(is_workspace_admin(user, slug), output_field=BooleanField()),
+    )
 
 
 def project_list_data(user, slug, data):
@@ -121,6 +155,8 @@ def project_list_data(user, slug, data):
         "sort_order",
         "member_role",
         "is_member",
+        "can_leave",
+        "has_admin_access",
     }
     return [
         project

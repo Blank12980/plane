@@ -39,7 +39,12 @@ from plane.db.models import (
 )
 from plane.db.models.intake import IntakeIssueStatus
 from plane.utils.host import base_host
-from plane.utils.project_access import projects_for_user, project_list_data, is_workspace_admin
+from plane.utils.project_access import (
+    projects_for_user,
+    project_list_data,
+    is_workspace_admin,
+    annotate_project_membership,
+)
 
 
 class ProjectViewSet(BaseViewSet):
@@ -55,8 +60,7 @@ class ProjectViewSet(BaseViewSet):
             workspace__slug=self.kwargs.get("slug"),
         ).values("sort_order")
         return self.filter_queryset(
-            super()
-            .get_queryset()
+            annotate_project_membership(super().get_queryset(), self.request.user, self.kwargs.get("slug"))
             .filter(
                 id__in=projects_for_user(self.request.user, self.kwargs.get("slug"), include_public=True).values("pk")
             )
@@ -70,13 +74,6 @@ class ProjectViewSet(BaseViewSet):
                         project_id=OuterRef("pk"),
                     )
                 )
-            )
-            .annotate(
-                member_role=ProjectMember.objects.filter(
-                    project_id=OuterRef("pk"),
-                    member_id=self.request.user.id,
-                    is_active=True,
-                ).values("role")
             )
             .annotate(
                 anchor=DeployBoard.objects.filter(
@@ -124,15 +121,8 @@ class ProjectViewSet(BaseViewSet):
         ).values("sort_order")
 
         projects = (
-            projects_for_user(request.user, slug, include_public=True)
+            annotate_project_membership(projects_for_user(request.user, slug, include_public=True), request.user, slug)
             .select_related("workspace", "workspace__owner", "default_assignee", "project_lead")
-            .annotate(
-                member_role=ProjectMember.objects.filter(
-                    project_id=OuterRef("pk"),
-                    member_id=self.request.user.id,
-                    is_active=True,
-                ).values("role")
-            )
             .annotate(
                 intake_count=Count(
                     "project_intakeissue",
@@ -152,6 +142,9 @@ class ProjectViewSet(BaseViewSet):
             "sort_order",
             "logo_props",
             "member_role",
+            "is_member",
+            "can_leave",
+            "has_admin_access",
             "intake_count",
             "archived_at",
             "workspace",

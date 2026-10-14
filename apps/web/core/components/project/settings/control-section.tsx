@@ -15,6 +15,8 @@ import { Button } from "@plane/propel/button";
 import { SettingsBoxedControlItem } from "@/components/settings/boxed-control-item";
 // hooks
 import { useProject } from "@/hooks/store/use-project";
+import { useUserPermissions } from "@/hooks/store/user";
+import { LeaveProjectModal } from "../leave-project-modal";
 // local imports
 import { ArchiveRestoreProjectModal } from "../archive-restore-modal";
 import { DeleteProjectModal } from "../delete-project-modal";
@@ -30,10 +32,12 @@ export const GeneralProjectSettingsControlSection = observer(function GeneralPro
   // states
   const [selectProject, setSelectedProject] = useState<string | null>(null);
   const [archiveProject, setArchiveProject] = useState<boolean>(false);
+  const [isLeaveOpen, setIsLeaveOpen] = useState(false);
   // params
   const { workspaceSlug } = useParams();
   // store hooks
   const { currentProjectDetails } = useProject();
+  const { canLeaveProject } = useUserPermissions();
   // translation
   const { t } = useTranslation();
 
@@ -55,6 +59,19 @@ export const GeneralProjectSettingsControlSection = observer(function GeneralPro
         isOpen={Boolean(selectProject)}
         onClose={() => setSelectedProject(null)}
       />
+      <LeaveProjectModal project={currentProjectDetails} isOpen={isLeaveOpen} onClose={() => setIsLeaveOpen(false)} />
+      {workspaceSlug && canLeaveProject(workspaceSlug, projectId) && (
+        <SettingsBoxedControlItem
+          className="mb-6 rounded-lg border border-subtle bg-layer-2"
+          title="Покинуть проект"
+          description="Вы перестанете быть участником проекта. Для повторного вступления потребуется приглашение."
+          control={
+            <Button variant="secondary" onClick={() => setIsLeaveOpen(true)}>
+              Покинуть проект
+            </Button>
+          }
+        />
+      )}
       <div className="rounded-lg border border-subtle bg-layer-2">
         {/* Project Selector */}
         <SettingsBoxedControlItem

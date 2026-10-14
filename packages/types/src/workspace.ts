@@ -101,6 +101,7 @@ export type TInstanceWorkspaceMemberPaginationInfo = TPaginationInfo & {
 };
 
 export interface IWorkspaceMemberMe {
+  is_instance_admin_access?: boolean;
   company_role: string | null;
   created_at: Date;
   created_by: string;

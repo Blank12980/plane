@@ -33,6 +33,7 @@ export interface IUserLite {
   joining_date?: string;
 }
 export interface IUser extends IUserLite {
+  is_instance_admin?: boolean;
   // only for uploading the cover image
   cover_image_asset?: string | null;
   cover_image?: string | null;

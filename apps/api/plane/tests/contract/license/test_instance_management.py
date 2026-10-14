@@ -12,6 +12,7 @@ from plane.db.models import Project, ProjectMember, User, Workspace, WorkspaceMe
 from plane.license.models import Instance, InstanceAdmin
 from plane.license.workspace_access import (
     grant_instance_admin_access,
+    promote_explicit_project_membership,
     promote_explicit_workspace_membership,
 )
 
@@ -276,13 +277,14 @@ class TestInstanceManagement:
         project_member = ProjectMember.objects.get(project=project, member=admin)
         assert workspace_member.is_instance_admin_access is False
         assert workspace_member.role == 15
+        assert project_member.is_instance_admin_access is True
+        promote_explicit_project_membership(admin, project, role=15)
+        project_member.refresh_from_db()
         assert project_member.is_instance_admin_access is False
         assert project_member.role == 15
 
     @pytest.mark.django_db
-    def test_project_member_list_hides_background_admins_and_keeps_explicit_ones(
-        self, api_client, managed_instance
-    ):
+    def test_project_member_list_hides_background_admins_and_keeps_explicit_ones(self, api_client, managed_instance):
         owner = create_user("owner@gizmo.so")
         hidden_admin = create_user("hidden@gizmo.so")
         explicit_admin = create_user("explicit@gizmo.so")
@@ -293,6 +295,7 @@ class TestInstanceManagement:
         project = Project.objects.create(name="Project", identifier="PCK", workspace=workspace, created_by=owner)
         ProjectMember.objects.create(project=project, workspace=workspace, member=owner, role=20)
         promote_explicit_workspace_membership(explicit_admin, workspace, role=20)
+        promote_explicit_project_membership(explicit_admin, project, role=20)
 
         api_client.force_authenticate(user=owner)
         response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/members/")
