@@ -37,6 +37,9 @@ from plane.utils.analytics_plot import burndown_plot
 from .. import BaseAPIView
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class CycleArchiveUnarchiveEndpoint(BaseAPIView):
     def get_queryset(self):
         favorite_subquery = UserFavorite.objects.filter(
@@ -116,8 +119,7 @@ class CycleArchiveUnarchiveEndpoint(BaseAPIView):
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(archived_at__isnull=False)
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(project__archived_at__isnull=True)
             .select_related("project", "workspace", "owned_by")

@@ -6,12 +6,16 @@
 from rest_framework import status
 from rest_framework.response import Response
 
-from plane.db.models import UserRecentVisit
+from django.db.models import Q
+from plane.db.models import UserRecentVisit, Issue, ProjectPage
 from plane.app.serializers import WorkspaceRecentVisitSerializer
 
 # Modules imports
 from ..base import BaseViewSet
 from plane.app.permissions import allow_permission, ROLE
+
+
+from plane.utils.project_access import projects_for_user
 
 
 class UserRecentVisitViewSet(BaseViewSet):
@@ -23,7 +27,18 @@ class UserRecentVisitViewSet(BaseViewSet):
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
     def list(self, request, slug):
-        user_recent_visits = UserRecentVisit.objects.filter(workspace__slug=slug, user=request.user)
+        allowed_ids = projects_for_user(request.user, slug).values("pk")
+        user_recent_visits = UserRecentVisit.objects.filter(workspace__slug=slug, user=request.user).filter(
+            Q(entity_name__iexact="project", entity_identifier__in=allowed_ids)
+            | Q(
+                entity_name__iexact="issue",
+                entity_identifier__in=Issue.objects.filter(project_id__in=allowed_ids).values("pk"),
+            )
+            | Q(
+                entity_name__iexact="page",
+                entity_identifier__in=ProjectPage.objects.filter(project_id__in=allowed_ids).values("page_id"),
+            )
+        )
 
         entity_name = request.query_params.get("entity_name")
 

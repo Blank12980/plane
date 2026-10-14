@@ -72,6 +72,7 @@ class ProjectCreateSerializer(BaseSerializer):
         model = Project
         fields = [
             "name",
+            "network",
             "description",
             "project_lead",
             "default_assignee",

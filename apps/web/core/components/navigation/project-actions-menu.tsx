@@ -20,6 +20,7 @@ type Props = {
   };
   isAdmin: boolean;
   isAuthorized: boolean;
+  canLeaveProject: boolean;
   onCopyText: () => void;
   onLeaveProject: () => void;
   onPublishModal: () => void;
@@ -30,6 +31,7 @@ export function ProjectActionsMenu({
   project,
   isAdmin,
   isAuthorized,
+  canLeaveProject,
   onCopyText,
   onLeaveProject,
   onPublishModal,
@@ -102,7 +104,7 @@ export function ProjectActionsMenu({
         </div>
       </CustomMenu.MenuItem>
       {/* Leave project */}
-      {!isAuthorized && (
+      {canLeaveProject && (
         <CustomMenu.MenuItem
           onClick={onLeaveProject}
           data-ph-element={MEMBER_TRACKER_ELEMENTS.SIDEBAR_PROJECT_QUICK_ACTIONS}

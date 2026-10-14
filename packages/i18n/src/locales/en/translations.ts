@@ -196,8 +196,9 @@ export default {
   date_range: "Date range",
   private: "Private",
   public: "Public",
-  accessible_only_by_invite: "Accessible only by invite",
-  anyone_in_the_workspace_except_guests_can_join: "Anyone in the workspace except Guests can join",
+  accessible_only_by_invite: "Visible only to invited members and administrators",
+  anyone_in_the_workspace_except_guests_can_join:
+    "Visible to everyone in the workspace. Joining requires an invitation; admins have access.",
   creating: "Creating",
   creating_project: "Creating project",
   adding_project_to_favorites: "Adding project to favorites",
@@ -1348,11 +1349,11 @@ export default {
       label: "Network",
       private: {
         title: "Private",
-        description: "Accessible only by invite",
+        description: "Visible only to invited members and administrators",
       },
       public: {
         title: "Public",
-        description: "Anyone in the workspace except Guests can join",
+        description: "Visible to everyone in the workspace. Joining requires an invitation; admins have access.",
       },
     },
     error: {

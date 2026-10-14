@@ -11,6 +11,7 @@ from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from plane.app.views.base import BaseAPIView
 from plane.app.permissions import ROLE, allow_permission
+from plane.utils.project_access import projects_for_user
 from plane.db.models import (
     WorkspaceMember,
     Project,
@@ -75,7 +76,9 @@ class AdvanceAnalyticsEndpoint(AdvanceAnalyticsBaseView):
             project_ids = self.request.GET.get("project_ids", None)
             project_ids = [str(project_id) for project_id in project_ids.split(",")]
             members_query = ProjectMember.objects.filter(
-                project_id__in=project_ids,
+                project_id__in=projects_for_user(self.request.user, slug=self._workspace_slug)
+                .filter(pk__in=project_ids)
+                .values("pk"),
                 is_active=True,
                 member__is_bot=False,
                 is_instance_admin_access=False,

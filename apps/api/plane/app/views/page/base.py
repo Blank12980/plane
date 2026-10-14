@@ -36,6 +36,7 @@ from plane.app.serializers import (
     PageDetailSerializer,
     PageBinaryUpdateSerializer,
 )
+from plane.utils.project_access import projects_for_user
 from plane.db.models import (
     Page,
     PageLog,
@@ -90,8 +91,7 @@ class PageViewSet(BaseViewSet):
             .get_queryset()
             .filter(workspace__slug=self.kwargs.get("slug"))
             .filter(
-                projects__project_projectmember__member=self.request.user,
-                projects__project_projectmember__is_active=True,
+                projects__id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
                 projects__archived_at__isnull=True,
             )
             .filter(parent__isnull=True)
@@ -422,8 +422,7 @@ class PageViewSet(BaseViewSet):
         queryset = (
             Page.objects.filter(workspace__slug=slug)
             .filter(
-                projects__project_projectmember__member=self.request.user,
-                projects__project_projectmember__is_active=True,
+                projects__id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
                 projects__archived_at__isnull=True,
             )
             .filter(parent__isnull=True)

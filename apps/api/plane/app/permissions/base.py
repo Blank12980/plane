@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from enum import Enum
+from plane.utils.project_access import is_workspace_admin, require_project_access
 
 
 class ROLE(Enum):
@@ -20,21 +21,16 @@ def allow_permission(allowed_roles, level="PROJECT", creator=False, model=None):
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(instance, request, *args, **kwargs):
-            # Check for creator if required
+            slug = kwargs["slug"]
+            if level == "PROJECT":
+                require_project_access(request.user, slug, kwargs["project_id"])
+                if is_workspace_admin(request.user, slug):
+                    return view_func(instance, request, *args, **kwargs)
             if creator and model:
-                # check if the user is part of the workspace or not
-                if not WorkspaceMember.objects.filter(
-                    member=request.user,
-                    workspace__slug=kwargs["slug"],
-                    is_active=True,
-                ).exists():
-                    return Response(
-                        {"error": "You don't have the required permissions."},
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
-
-                obj = model.objects.filter(id=kwargs["pk"], created_by=request.user).exists()
-                if obj:
+                if (
+                    WorkspaceMember.objects.filter(member=request.user, workspace__slug=slug, is_active=True).exists()
+                    and model.objects.filter(id=kwargs["pk"], workspace__slug=slug, created_by=request.user).exists()
+                ):
                     return view_func(instance, request, *args, **kwargs)
 
             # Convert allowed_roles to their values if they are enum members
@@ -42,6 +38,8 @@ def allow_permission(allowed_roles, level="PROJECT", creator=False, model=None):
 
             # Check role permissions
             if level == "WORKSPACE":
+                if ROLE.ADMIN.value in allowed_role_values and is_workspace_admin(request.user, slug):
+                    return view_func(instance, request, *args, **kwargs)
                 if WorkspaceMember.objects.filter(
                     member=request.user,
                     workspace__slug=kwargs["slug"],

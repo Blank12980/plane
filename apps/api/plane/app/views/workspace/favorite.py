@@ -15,6 +15,7 @@ from plane.app.views.base import BaseAPIView
 from plane.db.models import UserFavorite, Workspace
 from plane.app.serializers import UserFavoriteSerializer
 from plane.app.permissions import allow_permission, ROLE
+from plane.utils.project_access import projects_for_user
 
 
 class WorkspaceFavoriteEndpoint(BaseAPIView):
@@ -25,11 +26,7 @@ class WorkspaceFavoriteEndpoint(BaseAPIView):
         # the second filter is to check if the user is a member of the project
         favorites = UserFavorite.objects.filter(user=request.user, workspace__slug=slug, parent__isnull=True).filter(
             Q(project__isnull=True) & ~Q(entity_type="page")
-            | (
-                Q(project__isnull=False)
-                & Q(project__project_projectmember__member=request.user)
-                & Q(project__project_projectmember__is_active=True)
-            )
+            | (Q(project__isnull=False) & Q(project_id__in=projects_for_user(request.user, slug).values("pk")))
         )
         serializer = UserFavoriteSerializer(favorites, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -87,11 +84,7 @@ class WorkspaceFavoriteGroupEndpoint(BaseAPIView):
     def get(self, request, slug, favorite_id):
         favorites = UserFavorite.objects.filter(user=request.user, workspace__slug=slug, parent_id=favorite_id).filter(
             Q(project__isnull=True)
-            | (
-                Q(project__isnull=False)
-                & Q(project__project_projectmember__member=request.user)
-                & Q(project__project_projectmember__is_active=True)
-            )
+            | (Q(project__isnull=False) & Q(project_id__in=projects_for_user(request.user, slug).values("pk")))
         )
         serializer = UserFavoriteSerializer(favorites, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

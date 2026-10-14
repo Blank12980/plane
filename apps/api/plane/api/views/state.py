@@ -36,6 +36,9 @@ from plane.utils.openapi import (
 )
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class StateListCreateAPIEndpoint(BaseAPIView):
     """State List and Create Endpoint"""
 
@@ -49,8 +52,7 @@ class StateListCreateAPIEndpoint(BaseAPIView):
             State.objects.filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(is_triage=False)
             .filter(project__archived_at__isnull=True)
@@ -172,8 +174,7 @@ class StateDetailAPIEndpoint(BaseAPIView):
             State.objects.filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(is_triage=False)
             .filter(project__archived_at__isnull=True)

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, date
 from django.utils import timezone
 from typing import Dict, Optional, List, Union, Tuple, Any
 
+from plane.utils.project_access import projects_for_user
 from plane.db.models import User
 
 
@@ -150,11 +151,15 @@ def get_analytics_filters(
     if project_ids and isinstance(project_ids, str):
         project_ids = [str(project_id) for project_id in project_ids.split(",")]
 
+    allowed_projects = projects_for_user(user, slug)
+    if project_ids:
+        allowed_projects = allowed_projects.filter(pk__in=project_ids)
+    allowed_ids = allowed_projects.values("pk")
+
     # Base filters for workspace and user
     base_filters = {
         "workspace__slug": slug,
-        "project__project_projectmember__member": user,
-        "project__project_projectmember__is_active": True,
+        "project_id__in": allowed_ids,
         "project__deleted_at__isnull": True,
         "project__archived_at__isnull": True,
     }
@@ -162,16 +167,12 @@ def get_analytics_filters(
     # Project filters
     project_filters = {
         "workspace__slug": slug,
-        "project_projectmember__member": user,
-        "project_projectmember__is_active": True,
+        "id__in": allowed_ids,
         "deleted_at__isnull": True,
         "archived_at__isnull": True,
     }
 
     # Add project IDs to filters if provided
-    if project_ids:
-        base_filters["project_id__in"] = project_ids
-        project_filters["id__in"] = project_ids
 
     # Initialize date range variables
     analytics_date_range = None

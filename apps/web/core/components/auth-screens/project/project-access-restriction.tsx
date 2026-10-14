@@ -22,9 +22,9 @@ export const ProjectAccessRestriction = observer(function ProjectAccessRestricti
   const { t } = useTranslation();
 
   // Show join project screen if:
-  // - User lacks project membership (409 Conflict)
+  // - Workspace admins may explicitly join without an invitation
   // - User lacks permission to access the private project (403 Forbidden) but is a workspace admin (can join any project)
-  if (errorStatusCode === 409 || (errorStatusCode === 403 && isWorkspaceAdmin))
+  if (isWorkspaceAdmin && (errorStatusCode === 409 || errorStatusCode === 403))
     return (
       <div className="grid h-full w-full place-items-center bg-surface-1">
         <EmptyStateDetailed
@@ -47,7 +47,7 @@ export const ProjectAccessRestriction = observer(function ProjectAccessRestricti
 
   // Show no access screen if:
   // - User lacks permission to access the private project (403 Forbidden)
-  if (errorStatusCode === 403) {
+  if (errorStatusCode === 403 || errorStatusCode === 409) {
     return (
       <div className="grid h-full w-full place-items-center bg-surface-1">
         <EmptyStateDetailed

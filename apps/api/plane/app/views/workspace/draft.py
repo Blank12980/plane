@@ -41,6 +41,7 @@ from .. import BaseViewSet
 from plane.bgtasks.issue_activities_task import issue_activity
 from plane.utils.issue_filters import issue_filters
 from plane.utils.host import base_host
+from plane.utils.project_access import projects_for_user
 
 
 class WorkspaceDraftIssueViewSet(BaseViewSet):
@@ -49,6 +50,10 @@ class WorkspaceDraftIssueViewSet(BaseViewSet):
     def get_queryset(self):
         return (
             DraftIssue.objects.filter(workspace__slug=self.kwargs.get("slug"))
+            .filter(
+                Q(project__isnull=True)
+                | Q(project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"))
+            )
             .select_related("workspace", "project", "state", "parent")
             .prefetch_related("assignees", "labels", "draft_issue_module__module")
             .annotate(

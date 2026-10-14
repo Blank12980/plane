@@ -32,15 +32,14 @@ from plane.db.models import (
     Project,
     ProjectIdentifier,
     ProjectMember,
-    ProjectNetwork,
     ProjectUserProperty,
     State,
     DEFAULT_STATES,
     Workspace,
-    WorkspaceMember,
 )
 from plane.db.models.intake import IntakeIssueStatus
 from plane.utils.host import base_host
+from plane.utils.project_access import projects_for_user, project_list_data, is_workspace_admin
 
 
 class ProjectViewSet(BaseViewSet):
@@ -58,7 +57,9 @@ class ProjectViewSet(BaseViewSet):
         return self.filter_queryset(
             super()
             .get_queryset()
-            .filter(workspace__slug=self.kwargs.get("slug"))
+            .filter(
+                id__in=projects_for_user(self.request.user, self.kwargs.get("slug"), include_public=True).values("pk")
+            )
             .select_related("workspace", "workspace__owner", "default_assignee", "project_lead")
             .annotate(
                 is_favorite=Exists(
@@ -101,41 +102,18 @@ class ProjectViewSet(BaseViewSet):
     def list_detail(self, request, slug):
         fields = [field for field in request.GET.get("fields", "").split(",") if field]
         projects = self.get_queryset().order_by("sort_order", "name")
-        if WorkspaceMember.objects.filter(
-            member=request.user,
-            workspace__slug=slug,
-            is_active=True,
-            role=ROLE.GUEST.value,
-        ).exists():
-            projects = projects.filter(
-                project_projectmember__member=self.request.user,
-                project_projectmember__is_active=True,
-            )
-
-        if WorkspaceMember.objects.filter(
-            member=request.user,
-            workspace__slug=slug,
-            is_active=True,
-            role=ROLE.MEMBER.value,
-        ).exists():
-            projects = projects.filter(
-                Q(
-                    project_projectmember__member=self.request.user,
-                    project_projectmember__is_active=True,
-                )
-                | Q(network=2)
-            )
-
         if request.GET.get("per_page", False) and request.GET.get("cursor", False):
             return self.paginate(
                 order_by=request.GET.get("order_by", "-created_at"),
                 request=request,
                 queryset=(projects),
-                on_results=lambda projects: ProjectListSerializer(projects, many=True).data,
+                on_results=lambda projects: project_list_data(
+                    request.user, slug, ProjectListSerializer(projects, many=True).data
+                ),
             )
 
         projects = ProjectListSerializer(projects, many=True, fields=fields if fields else None).data
-        return Response(projects, status=status.HTTP_200_OK)
+        return Response(project_list_data(request.user, slug, list(projects)), status=status.HTTP_200_OK)
 
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
     def list(self, request, slug):
@@ -146,7 +124,7 @@ class ProjectViewSet(BaseViewSet):
         ).values("sort_order")
 
         projects = (
-            Project.objects.filter(workspace__slug=self.kwargs.get("slug"))
+            projects_for_user(request.user, slug, include_public=True)
             .select_related("workspace", "workspace__owner", "default_assignee", "project_lead")
             .annotate(
                 member_role=ProjectMember.objects.filter(
@@ -191,31 +169,7 @@ class ProjectViewSet(BaseViewSet):
             "updated_by",
         )
 
-        if WorkspaceMember.objects.filter(
-            member=request.user,
-            workspace__slug=slug,
-            is_active=True,
-            role=ROLE.GUEST.value,
-        ).exists():
-            projects = projects.filter(
-                project_projectmember__member=self.request.user,
-                project_projectmember__is_active=True,
-            )
-
-        if WorkspaceMember.objects.filter(
-            member=request.user,
-            workspace__slug=slug,
-            is_active=True,
-            role=ROLE.MEMBER.value,
-        ).exists():
-            projects = projects.filter(
-                Q(
-                    project_projectmember__member=self.request.user,
-                    project_projectmember__is_active=True,
-                )
-                | Q(network=2)
-            )
-        return Response(projects, status=status.HTTP_200_OK)
+        return Response(project_list_data(request.user, slug, list(projects)), status=status.HTTP_200_OK)
 
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
     def retrieve(self, request, slug, pk):
@@ -223,20 +177,6 @@ class ProjectViewSet(BaseViewSet):
 
         if project is None:
             return Response({"error": "Project does not exist"}, status=status.HTTP_404_NOT_FOUND)
-
-        member_ids = [str(project_member.member_id) for project_member in project.members_list]
-
-        if str(request.user.id) not in member_ids:
-            if project.network == ProjectNetwork.SECRET.value:
-                return Response(
-                    {"error": "You do not have permission"},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-            else:
-                return Response(
-                    {"error": "You are not a member of this project"},
-                    status=status.HTTP_409_CONFLICT,
-                )
 
         recent_visited_task.delay(
             slug=slug,
@@ -306,14 +246,12 @@ class ProjectViewSet(BaseViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def update(self, request, slug, pk=None):
+        return self.partial_update(request, slug, pk)
+
     def partial_update(self, request, slug, pk=None):
         # try:
-        is_workspace_admin = WorkspaceMember.objects.filter(
-            member=request.user,
-            workspace__slug=slug,
-            is_active=True,
-            role=ROLE.ADMIN.value,
-        ).exists()
+        workspace_admin_access = is_workspace_admin(request.user, slug)
 
         is_project_admin = ProjectMember.objects.filter(
             member=request.user,
@@ -324,7 +262,7 @@ class ProjectViewSet(BaseViewSet):
         ).exists()
 
         # Return error for if the user is neither workspace admin nor project admin
-        if not is_project_admin and not is_workspace_admin:
+        if not is_project_admin and not workspace_admin_access:
             return Response(
                 {"error": "You don't have the required permissions."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -332,7 +270,7 @@ class ProjectViewSet(BaseViewSet):
 
         workspace = Workspace.objects.get(slug=slug)
 
-        project = Project.objects.get(pk=pk)
+        project = Project.objects.get(pk=pk, workspace__slug=slug)
         intake_view = request.data.get("inbox_view", project.intake_view)
         current_instance = json.dumps(ProjectSerializer(project).data, cls=DjangoJSONEncoder)
         if project.archived_at:
@@ -376,12 +314,7 @@ class ProjectViewSet(BaseViewSet):
 
     def destroy(self, request, slug, pk):
         if (
-            WorkspaceMember.objects.filter(
-                member=request.user,
-                workspace__slug=slug,
-                is_active=True,
-                role=ROLE.ADMIN.value,
-            ).exists()
+            is_workspace_admin(request.user, slug)
             or ProjectMember.objects.filter(
                 member=request.user,
                 workspace__slug=slug,

@@ -21,6 +21,9 @@ from plane.db.models import State, Issue
 from plane.utils.cache import invalidate_cache
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class StateViewSet(BaseViewSet):
     serializer_class = StateSerializer
     model = State
@@ -32,8 +35,7 @@ class StateViewSet(BaseViewSet):
             .filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
                 project__archived_at__isnull=True,
             )
             .filter(is_triage=False)

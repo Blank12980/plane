@@ -18,6 +18,9 @@ from plane.db.models import ExporterHistory, Project, Workspace
 from .. import BaseAPIView
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class ExportIssuesEndpoint(BaseAPIView):
     model = ExporterHistory
     serializer_class = ExporterHistorySerializer
@@ -39,33 +42,27 @@ class ExportIssuesEndpoint(BaseAPIView):
             if not project_ids:
                 project_ids = Project.objects.filter(
                     workspace__slug=slug,
-                    project_projectmember__member=request.user,
-                    project_projectmember__is_active=True,
+                    pk__in=projects_for_user(request.user, self.kwargs.get("slug")).values("pk"),
                     archived_at__isnull=True,
                 ).values_list("id", flat=True)
                 project_ids = [str(project_id) for project_id in project_ids]
 
+            if not isinstance(project_ids, list):
+                return Response({"error": "Project must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                requested_ids = {str(UUID(str(project_id))) for project_id in project_ids}
+            except (TypeError, ValueError, AttributeError):
+                return Response({"error": "Invalid project ID."}, status=status.HTTP_400_BAD_REQUEST)
+            accessible_ids = {
+                str(project_id)
+                for project_id in projects_for_user(request.user, slug)
+                .filter(pk__in=requested_ids, archived_at__isnull=True)
+                .values_list("pk", flat=True)
+            }
+            if requested_ids != accessible_ids:
+                return Response({"error": "Project not found."}, status=status.HTTP_404_NOT_FOUND)
+            project_ids = sorted(requested_ids)
             if layout in ["module_task_status", "task_deadline", "task_hours"]:
-                if not isinstance(project_ids, list):
-                    return Response({"error": "Project must be a list."}, status=status.HTTP_400_BAD_REQUEST)
-                try:
-                    requested_ids = {str(UUID(str(project_id))) for project_id in project_ids}
-                except (TypeError, ValueError, AttributeError):
-                    return Response({"error": "Invalid project ID."}, status=status.HTTP_400_BAD_REQUEST)
-                accessible_ids = {
-                    str(project_id)
-                    for project_id in Project.objects.filter(
-                        id__in=requested_ids,
-                        workspace=workspace,
-                        project_projectmember__member=request.user,
-                        project_projectmember__is_active=True,
-                        project_projectmember__deleted_at__isnull=True,
-                        archived_at__isnull=True,
-                    ).values_list("id", flat=True)
-                }
-                if requested_ids != accessible_ids:
-                    return Response({"error": "Project not found."}, status=status.HTTP_404_NOT_FOUND)
-                project_ids = sorted(requested_ids)
                 multiple = True
 
             exporter = ExporterHistory.objects.create(
@@ -102,6 +99,9 @@ class ExportIssuesEndpoint(BaseAPIView):
         exporter_history = ExporterHistory.objects.filter(workspace__slug=slug, type="issue_exports").select_related(
             "workspace", "initiated_by"
         )
+
+        allowed_ids = list(projects_for_user(request.user, slug).values_list("pk", flat=True))
+        exporter_history = exporter_history.filter(project__contained_by=allowed_ids)
 
         if request.GET.get("per_page", False) and request.GET.get("cursor", False):
             return self.paginate(

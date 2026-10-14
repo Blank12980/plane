@@ -15,6 +15,9 @@ from plane.db.models import Issue, ProjectMember, IssueRelation
 from plane.utils.issue_search import search_issues
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class IssueSearchEndpoint(BaseAPIView):
     def filter_issues_by_project(self, project_id: int, issues: QuerySet) -> QuerySet:
         """
@@ -109,8 +112,7 @@ class IssueSearchEndpoint(BaseAPIView):
 
         issues = Issue.issue_objects.filter(
             workspace__slug=slug,
-            project__project_projectmember__member=self.request.user,
-            project__project_projectmember__is_active=True,
+            project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             project__archived_at__isnull=True,
         )
 

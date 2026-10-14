@@ -126,7 +126,11 @@ class ProjectListSerializer(DynamicBaseSerializer):
         project_members = getattr(obj, "members_list", None)
         if project_members is not None:
             # Filter members by the project ID
-            return [member.member_id for member in project_members if member.is_active and not member.member.is_bot]
+            return [
+                member.member_id
+                for member in project_members
+                if member.is_active and not member.member.is_bot and not member.is_instance_admin_access
+            ]
         return []
 
     def get_next_work_item_sequence(self, obj):

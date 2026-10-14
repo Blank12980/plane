@@ -37,6 +37,9 @@ from plane.utils.filters import ComplexFilterBackend
 from plane.utils.filters import IssueFilterSet
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class CycleIssueViewSet(BaseViewSet):
     serializer_class = CycleIssueSerializer
     model = CycleIssue
@@ -61,8 +64,7 @@ class CycleIssueViewSet(BaseViewSet):
             .filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(project__archived_at__isnull=True)
             .filter(cycle_id=self.kwargs.get("cycle_id"))

@@ -77,6 +77,9 @@ from plane.utils.timezone_converter import user_timezone_converter
 from .. import BaseAPIView, BaseViewSet
 
 
+from plane.utils.project_access import is_workspace_admin
+
+
 class IssueListEndpoint(BaseAPIView):
     filter_backends = (ComplexFilterBackend,)
     filterset_class = IssueFilterSet
@@ -742,21 +745,11 @@ class ProjectUserDisplayPropertyEndpoint(BaseAPIView):
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def patch(self, request, slug, project_id):
         try:
-            issue_property = ProjectUserProperty.objects.get(
-                user=request.user, 
-                project_id=project_id
-            )
+            issue_property = ProjectUserProperty.objects.get(user=request.user, project_id=project_id)
         except ProjectUserProperty.DoesNotExist:
-            issue_property = ProjectUserProperty.objects.create(
-                user=request.user, 
-                project_id=project_id
-            )
+            issue_property = ProjectUserProperty.objects.create(user=request.user, project_id=project_id)
 
-        serializer = ProjectUserPropertySerializer(
-            issue_property, 
-            data=request.data,
-            partial=True
-        )
+        serializer = ProjectUserPropertySerializer(issue_property, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -914,7 +907,11 @@ class IssuePaginatedViewSet(BaseViewSet):
             role=5,
             is_active=True,
         )
-        if project_member.exists() and not project.guest_view_all_features:
+        if (
+            project_member.exists()
+            and not project.guest_view_all_features
+            and not is_workspace_admin(request.user, slug)
+        ):
             base_queryset = base_queryset.filter(created_by=request.user)
             queryset = queryset.filter(created_by=request.user)
 
@@ -1054,9 +1051,9 @@ class IssueDetailEndpoint(BaseAPIView):
             .values("id")
         )
         # Main issue query
-        issue = Issue.issue_objects.filter(workspace__slug=slug, project_id=project_id).filter(
-            Exists(permission_subquery)
-        )
+        issue = Issue.issue_objects.filter(workspace__slug=slug, project_id=project_id)
+        if not is_workspace_admin(request.user, slug):
+            issue = issue.filter(Exists(permission_subquery))
 
         # Add additional prefetch based on expand parameter
         if self.expand:
@@ -1096,9 +1093,9 @@ class IssueDetailEndpoint(BaseAPIView):
             order_by=order_by_param,
             queryset=issue,
             total_count_queryset=total_issue_queryset,
-            on_results=lambda issue: IssueListDetailSerializer(
-                issue, many=True, fields=self.fields, expand=self.expand
-            ).data,
+            on_results=lambda issue: (
+                IssueListDetailSerializer(issue, many=True, fields=self.fields, expand=self.expand).data
+            ),
         )
 
 
