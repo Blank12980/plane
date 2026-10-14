@@ -23,6 +23,9 @@ from plane.bgtasks.work_item_link_task import crawl_work_item_link_title
 from plane.utils.host import base_host
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class IssueLinkViewSet(BaseViewSet):
     permission_classes = [ProjectEntityPermission]
 
@@ -37,8 +40,7 @@ class IssueLinkViewSet(BaseViewSet):
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(issue_id=self.kwargs.get("issue_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
                 project__archived_at__isnull=True,
             )
             .order_by("-created_at")

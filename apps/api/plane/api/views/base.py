@@ -29,6 +29,7 @@ from plane.api.permissions import TokenScopePermission, TokenWorkspacePermission
 from plane.utils.exception_logger import log_exception
 from plane.utils.paginator import BasePaginator
 from plane.utils.core.mixins import ReadReplicaControlMixin
+from plane.utils.project_access import ProjectAccessMixin
 
 
 logger = logging.getLogger("plane.api")
@@ -57,7 +58,7 @@ class TimezoneMixin:
             timezone.deactivate()
 
 
-class BaseAPIView(TimezoneMixin, GenericAPIView, ReadReplicaControlMixin, BasePaginator):
+class BaseAPIView(ProjectAccessMixin, TimezoneMixin, GenericAPIView, ReadReplicaControlMixin, BasePaginator):
     authentication_classes = [APIKeyAuthentication]
 
     permission_classes = [IsAuthenticated]
@@ -185,7 +186,7 @@ class BaseAPIView(TimezoneMixin, GenericAPIView, ReadReplicaControlMixin, BasePa
         return expand if expand else None
 
 
-class BaseViewSet(TimezoneMixin, ReadReplicaControlMixin, ModelViewSet, BasePaginator):
+class BaseViewSet(ProjectAccessMixin, TimezoneMixin, ReadReplicaControlMixin, ModelViewSet, BasePaginator):
     model = None
 
     authentication_classes = [APIKeyAuthentication]

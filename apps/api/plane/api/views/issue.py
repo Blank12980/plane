@@ -60,6 +60,7 @@ from plane.app.permissions import (
     ProjectMemberPermission,
 )
 from plane.bgtasks.issue_activities_task import issue_activity
+from plane.utils.project_access import projects_for_user, is_workspace_admin
 from plane.db.models import (
     Issue,
     IssueActivity,
@@ -148,6 +149,14 @@ from plane.bgtasks.work_item_link_task import crawl_work_item_link_title
 
 
 def user_has_issue_permission(user_id, project_id, issue=None, allowed_roles=None, allow_creator=True):
+    from plane.db.models import User
+
+    user = User.objects.get(pk=user_id)
+    project = Project.objects.get(pk=project_id)
+    if is_workspace_admin(user, project.workspace.slug):
+        return True
+    if not projects_for_user(user, project.workspace.slug).filter(pk=project_id).exists():
+        return False
     if allow_creator and issue is not None and user_id == issue.created_by_id:
         return True
 
@@ -854,8 +863,7 @@ class LabelListCreateAPIEndpoint(BaseAPIView):
             Label.objects.filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(project__archived_at__isnull=True)
             .select_related("project")
@@ -1090,8 +1098,7 @@ class IssueLinkListCreateAPIEndpoint(BaseAPIView):
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(issue_id=self.kwargs.get("issue_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(project__archived_at__isnull=True)
             .order_by(self.kwargs.get("order_by", "-created_at"))
@@ -1128,9 +1135,9 @@ class IssueLinkListCreateAPIEndpoint(BaseAPIView):
         return self.paginate(
             request=request,
             queryset=(self.get_queryset()),
-            on_results=lambda issue_links: IssueLinkSerializer(
-                issue_links, many=True, fields=self.fields, expand=self.expand
-            ).data,
+            on_results=lambda issue_links: (
+                IssueLinkSerializer(issue_links, many=True, fields=self.fields, expand=self.expand).data
+            ),
         )
 
     @issue_link_docs(
@@ -1195,8 +1202,7 @@ class IssueLinkDetailAPIEndpoint(BaseAPIView):
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(issue_id=self.kwargs.get("issue_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(project__archived_at__isnull=True)
             .order_by(self.kwargs.get("order_by", "-created_at"))
@@ -1235,9 +1241,9 @@ class IssueLinkDetailAPIEndpoint(BaseAPIView):
             return self.paginate(
                 request=request,
                 queryset=(self.get_queryset()),
-                on_results=lambda issue_links: IssueLinkSerializer(
-                    issue_links, many=True, fields=self.fields, expand=self.expand
-                ).data,
+                on_results=lambda issue_links: (
+                    IssueLinkSerializer(issue_links, many=True, fields=self.fields, expand=self.expand).data
+                ),
             )
         issue_link = self.get_queryset().get(pk=pk)
         serializer = IssueLinkSerializer(issue_link, fields=self.fields, expand=self.expand)
@@ -1338,8 +1344,7 @@ class IssueCommentListCreateAPIEndpoint(BaseAPIView):
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(issue_id=self.kwargs.get("issue_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(project__archived_at__isnull=True)
             .select_related("workspace", "project", "issue", "actor")
@@ -1386,9 +1391,9 @@ class IssueCommentListCreateAPIEndpoint(BaseAPIView):
         return self.paginate(
             request=request,
             queryset=(self.get_queryset()),
-            on_results=lambda issue_comments: IssueCommentSerializer(
-                issue_comments, many=True, fields=self.fields, expand=self.expand
-            ).data,
+            on_results=lambda issue_comments: (
+                IssueCommentSerializer(issue_comments, many=True, fields=self.fields, expand=self.expand).data
+            ),
         )
 
     @issue_comment_docs(
@@ -1494,8 +1499,7 @@ class IssueCommentDetailAPIEndpoint(BaseAPIView):
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(issue_id=self.kwargs.get("issue_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(project__archived_at__isnull=True)
             .select_related("workspace", "project", "issue", "actor")
@@ -1687,8 +1691,7 @@ class IssueActivityListAPIEndpoint(BaseAPIView):
             IssueActivity.objects.filter(issue_id=issue_id, workspace__slug=slug, project_id=project_id)
             .filter(
                 ~Q(field__in=["comment", "vote", "reaction", "draft"]),
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(project__archived_at__isnull=True)
             .select_related("actor", "workspace", "issue", "project")
@@ -1697,9 +1700,9 @@ class IssueActivityListAPIEndpoint(BaseAPIView):
         return self.paginate(
             request=request,
             queryset=(issue_activities),
-            on_results=lambda issue_activity: IssueActivitySerializer(
-                issue_activity, many=True, fields=self.fields, expand=self.expand
-            ).data,
+            on_results=lambda issue_activity: (
+                IssueActivitySerializer(issue_activity, many=True, fields=self.fields, expand=self.expand).data
+            ),
         )
 
 
@@ -1743,8 +1746,7 @@ class IssueActivityDetailAPIEndpoint(BaseAPIView):
                 IssueActivity.objects.filter(issue_id=issue_id, workspace__slug=slug, project_id=project_id, id=pk)
                 .filter(
                     ~Q(field__in=["comment", "vote", "reaction", "draft"]),
-                    project__project_projectmember__member=self.request.user,
-                    project__project_projectmember__is_active=True,
+                    project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
                 )
                 .filter(project__archived_at__isnull=True)
                 .select_related("actor", "workspace", "issue", "project")
@@ -2238,8 +2240,7 @@ class IssueSearchEndpoint(BaseAPIView):
         # Filter issues
         issues = Issue.issue_objects.filter(
             q,
-            project__project_projectmember__member=self.request.user,
-            project__project_projectmember__is_active=True,
+            project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             project__archived_at__isnull=True,
             workspace__slug=slug,
         )

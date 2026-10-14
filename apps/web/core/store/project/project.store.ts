@@ -312,8 +312,17 @@ export class ProjectStore implements IProjectStore {
       this.loader = "init-loader";
       const projectsResponse = await this.projectService.getProjectsLite(workspaceSlug);
       runInAction(() => {
+        const workspace = this.rootStore.workspaceRoot.getWorkspaceBySlug(workspaceSlug);
+        const visibleIds = new Set(projectsResponse.map((project) => project.id));
+        Object.values(this.projectMap).forEach((project) => {
+          if (project.workspace === workspace?.id && !visibleIds.has(project.id)) {
+            delete this.projectMap[project.id];
+            this.rootStore.favorite.removeFavoriteFromStore(project.id);
+          }
+        });
         projectsResponse.forEach((project) => {
-          update(this.projectMap, [project.id], (p) => ({ ...p, ...project }));
+          if (project.member_role) update(this.projectMap, [project.id], (p) => ({ ...p, ...project }));
+          else set(this.projectMap, [project.id], project);
         });
         this.loader = "loaded";
         if (!this.fetchStatus) this.fetchStatus = "partial";
@@ -341,8 +350,16 @@ export class ProjectStore implements IProjectStore {
       }
       const projectsResponse = await this.projectService.getProjects(workspaceSlug);
       runInAction(() => {
+        const workspace = this.rootStore.workspaceRoot.getWorkspaceBySlug(workspaceSlug);
+        const visibleIds = new Set(projectsResponse.map((project) => project.id));
+        Object.values(this.projectMap).forEach((project) => {
+          if (project.workspace === workspace?.id && !visibleIds.has(project.id)) {
+            delete this.projectMap[project.id];
+            this.rootStore.favorite.removeFavoriteFromStore(project.id);
+          }
+        });
         projectsResponse.forEach((project) => {
-          update(this.projectMap, [project.id], (p) => ({ ...p, ...project }));
+          set(this.projectMap, [project.id], project);
         });
         this.loader = "loaded";
         this.fetchStatus = "complete";

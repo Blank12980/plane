@@ -3,6 +3,7 @@
 # See the LICENSE file for details.
 
 from plane.db.models import ProjectMember, Page
+from plane.utils.project_access import is_workspace_admin, require_project_access
 from plane.app.permissions import ROLE
 
 
@@ -72,6 +73,9 @@ class ProjectPagePermission(BasePermission):
         Hook for extended access checking
         Returns: True (allow), False (deny), None (continue with normal flow)
         """
+        require_project_access(request.user, slug, project_id)
+        if is_workspace_admin(request.user, slug):
+            return True, ADMIN
         role = self._check_project_member_access(request, slug, project_id)
         if not role:
             return False, None

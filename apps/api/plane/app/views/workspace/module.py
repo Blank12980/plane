@@ -16,12 +16,17 @@ from plane.app.permissions import WorkspaceViewerPermission
 from plane.app.serializers.module import ModuleSerializer
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class WorkspaceModulesEndpoint(BaseAPIView):
     permission_classes = [WorkspaceViewerPermission]
 
     def get(self, request, slug):
         modules = (
-            Module.objects.filter(workspace__slug=slug)
+            Module.objects.filter(
+                workspace__slug=slug, project_id__in=projects_for_user(request.user, slug).values("pk")
+            )
             .select_related("project")
             .select_related("workspace")
             .select_related("lead")

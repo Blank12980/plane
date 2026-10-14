@@ -5,7 +5,8 @@
 # Third Party imports
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Min
+from django.db.models import Min, Q
+from django.db import transaction
 
 # Module imports
 from .base import BaseViewSet, BaseAPIView
@@ -18,11 +19,27 @@ from plane.app.serializers import (
 
 from plane.app.permissions import WorkspaceUserPermission
 
-from plane.db.models import Project, ProjectMember, ProjectUserProperty, WorkspaceMember
+from plane.db.models import (
+    Project,
+    ProjectMember,
+    ProjectUserProperty,
+    WorkspaceMember,
+    UserFavorite,
+    UserRecentVisit,
+    Issue,
+    ProjectPage,
+)
 from plane.license.workspace_access import promote_explicit_workspace_membership
 from plane.bgtasks.project_add_user_email_task import project_add_user_email
 from plane.utils.host import base_host
+from plane.utils.project_access import is_workspace_admin, projects_for_user
 from plane.app.permissions.base import allow_permission, ROLE
+
+
+def requesting_membership(request, slug, project_id):
+    if is_workspace_admin(request.user, slug):
+        return ProjectMember(member=request.user, project_id=project_id, role=ROLE.ADMIN.value)
+    return ProjectMember.objects.get(member=request.user, workspace__slug=slug, project_id=project_id, is_active=True)
 
 
 class ProjectMemberViewSet(BaseViewSet):
@@ -194,12 +211,7 @@ class ProjectMemberViewSet(BaseViewSet):
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def retrieve(self, request, slug, project_id, pk):
-        requesting_project_member = ProjectMember.objects.get(
-            project_id=project_id,
-            workspace__slug=slug,
-            member=request.user,
-            is_active=True,
-        )
+        requesting_project_member = requesting_membership(request, slug, project_id)
 
         project_member = (
             ProjectMember.objects.filter(
@@ -240,21 +252,16 @@ class ProjectMemberViewSet(BaseViewSet):
         workspace_role = WorkspaceMember.objects.get(
             workspace__slug=slug, member=project_member.member, is_active=True
         ).role
-        is_workspace_admin = workspace_role == ROLE.ADMIN.value
+        is_target_workspace_admin = workspace_role == ROLE.ADMIN.value
 
         # Check if the user is not editing their own role if they are not an admin
-        if request.user.id == project_member.member_id and not is_workspace_admin:
+        if request.user.id == project_member.member_id and not is_workspace_admin(request.user, slug):
             return Response(
                 {"error": "You cannot update your own role"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         # Check while updating user roles
-        requested_project_member = ProjectMember.objects.get(
-            project_id=project_id,
-            workspace__slug=slug,
-            member=request.user,
-            is_active=True,
-        )
+        requested_project_member = requesting_membership(request, slug, project_id)
 
         if workspace_role in [5] and int(request.data.get("role", project_member.role)) in [15, 20]:
             return Response(
@@ -265,7 +272,7 @@ class ProjectMemberViewSet(BaseViewSet):
         if (
             "role" in request.data
             and int(request.data.get("role", project_member.role)) > requested_project_member.role
-            and not is_workspace_admin
+            and not is_target_workspace_admin
         ):
             return Response(
                 {"error": "You cannot update a role that is higher than your own role"},
@@ -294,12 +301,7 @@ class ProjectMemberViewSet(BaseViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
         # check requesting user role
-        requesting_project_member = ProjectMember.objects.get(
-            workspace__slug=slug,
-            member=request.user,
-            project_id=project_id,
-            is_active=True,
-        )
+        requesting_project_member = requesting_membership(request, slug, project_id)
         # User cannot remove himself
         if str(project_member.id) == str(requesting_project_member.id):
             return Response(
@@ -317,8 +319,11 @@ class ProjectMemberViewSet(BaseViewSet):
         project_member.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @transaction.atomic
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def leave(self, request, slug, project_id):
+        # Serialize departures so two admins cannot both pass the last-admin check.
+        Project.objects.select_for_update().get(pk=project_id, workspace__slug=slug)
         project_member = ProjectMember.objects.get(
             workspace__slug=slug,
             project_id=project_id,
@@ -352,20 +357,44 @@ class ProjectMemberViewSet(BaseViewSet):
         # Deactivate the user
         project_member.is_active = False
         project_member.save()
+        UserFavorite.objects.filter(user=request.user, project_id=project_id, workspace__slug=slug).delete(soft=False)
+        UserRecentVisit.objects.filter(user=request.user, workspace__slug=slug).filter(
+            Q(entity_name__iexact="project", entity_identifier=project_id)
+            | Q(
+                entity_name__iexact="issue",
+                entity_identifier__in=Issue.objects.filter(project_id=project_id).values("pk"),
+            )
+            | Q(
+                entity_name__iexact="page",
+                entity_identifier__in=ProjectPage.objects.filter(project_id=project_id).values("page_id"),
+            )
+        ).delete(soft=False)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ProjectMemberUserEndpoint(BaseAPIView):
     def get(self, request, slug, project_id):
-        project_member = ProjectMember.objects.get(
-            project_id=project_id,
-            workspace__slug=slug,
-            member=request.user,
-            is_active=True,
-        )
+        project_member = ProjectMember.objects.filter(
+            project_id=project_id, workspace__slug=slug, member=request.user, is_active=True
+        ).first()
+        if project_member is None and is_workspace_admin(request.user, slug):
+            return Response(
+                {
+                    "id": None,
+                    "member": str(request.user.id),
+                    "role": ROLE.ADMIN.value,
+                    "original_role": None,
+                    "created_at": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+        if project_member is None:
+            return Response({"error": "Project membership not found"}, status=status.HTTP_404_NOT_FOUND)
         serializer = ProjectMemberSerializer(project_member)
-
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        data = {**serializer.data, "original_role": project_member.role}
+        if project_member.is_instance_admin_access:
+            data.update(id=None, original_role=None, created_at=None)
+        return Response(data, status=status.HTTP_200_OK)
 
 
 class UserProjectRolesEndpoint(BaseAPIView):
@@ -382,6 +411,10 @@ class UserProjectRolesEndpoint(BaseAPIView):
         ).values("project_id", "role")
 
         project_members = {str(member["project_id"]): member["role"] for member in project_members}
+        if is_workspace_admin(request.user, slug):
+            project_members = {
+                str(pk): ROLE.ADMIN.value for pk in projects_for_user(request.user, slug).values_list("pk", flat=True)
+            }
         return Response(project_members, status=status.HTTP_200_OK)
 
 

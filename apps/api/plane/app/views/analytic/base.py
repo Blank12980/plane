@@ -23,7 +23,6 @@ from plane.db.models import (
     AnalyticView,
     Issue,
     Workspace,
-    Project,
     ProjectMember,
     Cycle,
     Module,
@@ -32,6 +31,9 @@ from plane.db.models import (
 from plane.utils.analytics_plot import build_graph_plot
 from plane.utils.issue_filters import issue_filters
 from plane.app.permissions import allow_permission, ROLE
+
+
+from plane.utils.project_access import projects_for_user
 
 
 class AnalyticsEndpoint(BaseAPIView):
@@ -74,6 +76,10 @@ class AnalyticsEndpoint(BaseAPIView):
 
         # Additional filters that need to be applied
         filters = issue_filters(request.GET, "GET")
+        allowed_projects = projects_for_user(request.user, slug)
+        if "project_id__in" in filters:
+            allowed_projects = allowed_projects.filter(pk__in=filters["project_id__in"])
+        filters["project_id__in"] = allowed_projects.values("pk")
 
         # Get the issues for the workspace with the additional filters applied
         queryset = Issue.issue_objects.filter(workspace__slug=slug, **filters)
@@ -208,7 +214,11 @@ class SavedAnalyticEndpoint(BaseAPIView):
     def get(self, request, slug, analytic_id):
         analytic_view = AnalyticView.objects.get(pk=analytic_id, workspace__slug=slug)
 
-        filter = analytic_view.query
+        filter = {**analytic_view.query, "workspace__slug": slug}
+        allowed_projects = projects_for_user(request.user, slug)
+        if "project_id__in" in filter:
+            allowed_projects = allowed_projects.filter(pk__in=filter["project_id__in"])
+        filter["project_id__in"] = allowed_projects.values("pk")
         queryset = Issue.issue_objects.filter(**filter)
 
         x_axis = analytic_view.query_dict.get("x_axis", False)
@@ -279,6 +289,10 @@ class DefaultAnalyticsEndpoint(BaseAPIView):
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
     def get(self, request, slug):
         filters = issue_filters(request.GET, "GET")
+        allowed_projects = projects_for_user(request.user, slug)
+        if "project_id__in" in filters:
+            allowed_projects = allowed_projects.filter(pk__in=filters["project_id__in"])
+        filters["project_id__in"] = allowed_projects.values("pk")
         base_issues = Issue.issue_objects.filter(workspace__slug=slug, **filters)
 
         total_issues = base_issues.count()
@@ -433,7 +447,7 @@ class ProjectStatsEndpoint(BaseAPIView):
         if not requested_fields:
             requested_fields = valid_fields
 
-        projects = Project.objects.filter(workspace__slug=slug)
+        projects = projects_for_user(request.user, slug)
         if project_ids:
             projects = projects.filter(id__in=project_ids.split(","))
 

@@ -53,22 +53,25 @@ export const LeaveProjectModal = observer(function LeaveProjectModal(props: ILea
     onClose();
   };
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: FormData) => {
     if (!workspaceSlug) return;
 
     if (data) {
       if (data.projectName === project?.name) {
         if (data.confirmLeave === "Покинуть проект") {
-          router.push(`/${workspaceSlug}/projects`);
           return leaveProject(workspaceSlug.toString(), project.id)
             .then(() => {
               handleClose();
+              router.push(`/${workspaceSlug}/projects`);
+              return undefined;
             })
-            .catch((_err) => {
+            .catch((error: unknown) => {
+              console.error("Failed to leave project", error);
               setToast({
                 type: TOAST_TYPE.ERROR,
                 title: "Ошибка!",
-                message: "Что-то пошло не так. Попробуйте позже.",
+                message:
+                  "Не удалось выйти. Если вы единственный администратор проекта, сначала назначьте другого администратора.",
               });
             });
         } else {
@@ -110,13 +113,14 @@ export const LeaveProjectModal = observer(function LeaveProjectModal(props: ILea
           <p className="text-13 leading-7 text-secondary">
             Вы уверены, что хотите покинуть проект —
             <span className="font-medium text-primary">{` "${project?.name}" `}</span>? Все связанные с вами рабочие
-            элементы станут недоступны.
+            элементы станут недоступны. Для повторного вступления потребуется новое приглашение.
           </p>
         </span>
 
         <div className="text-secondary">
           <p className="text-13 break-words">
-            Введите название проекта <span className="font-medium text-primary">{project?.name}</span>, чтобы продолжить:
+            Введите название проекта <span className="font-medium text-primary">{project?.name}</span>, чтобы
+            продолжить:
           </p>
           <Controller
             control={control}

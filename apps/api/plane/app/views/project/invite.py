@@ -10,27 +10,29 @@ from datetime import datetime
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 # Third Party imports
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import serializers
 
 # Module imports
 from .base import BaseViewSet, BaseAPIView
 from plane.app.serializers import ProjectMemberInviteSerializer
-from plane.app.permissions import allow_permission, ROLE
+from plane.app.permissions import allow_permission, ROLE, ProjectAdminPermission
+from plane.bgtasks.project_invitation_task import project_invitation
+from plane.utils.project_access import is_workspace_admin
 from plane.db.models import (
     ProjectMember,
     Workspace,
     ProjectMemberInvite,
-    User,
     WorkspaceMember,
     Project,
     ProjectUserProperty,
 )
-from plane.db.models.project import ProjectNetwork
 from plane.license.workspace_access import (
     promote_explicit_project_membership,
     promote_explicit_workspace_membership,
@@ -41,6 +43,7 @@ from plane.utils.host import base_host
 class ProjectInvitationsViewset(BaseViewSet):
     serializer_class = ProjectMemberInviteSerializer
     model = ProjectMemberInvite
+    permission_classes = [ProjectAdminPermission]
 
     search_fields = []
 
@@ -63,12 +66,21 @@ class ProjectInvitationsViewset(BaseViewSet):
             return Response({"error": "Emails are required"}, status=status.HTTP_400_BAD_REQUEST)
 
         for email in emails:
-            workspace_role = WorkspaceMember.objects.filter(
-                workspace__slug=slug, member__email=email.get("email"), is_active=True
-            ).role
+            workspace_role = (
+                WorkspaceMember.objects.filter(
+                    workspace__slug=slug, member__email__iexact=email.get("email", "").strip(), is_active=True
+                )
+                .values_list("role", flat=True)
+                .first()
+            )
+            if email.get("role", 5) not in [role.value for role in ROLE]:
+                return Response({"error": "Invalid project role"}, status=status.HTTP_400_BAD_REQUEST)
 
             if workspace_role in [5, 20] and workspace_role != email.get("role", 5):
-                return Response({"error": "You cannot invite a user with different role than workspace role"})
+                return Response(
+                    {"error": "You cannot invite a user with different role than workspace role"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         workspace = Workspace.objects.get(slug=slug)
 
@@ -106,7 +118,7 @@ class ProjectInvitationsViewset(BaseViewSet):
 
         # Send invitations
         for invitation in project_invitations:
-            project_invitations.delay(
+            project_invitation.delay(
                 invitation.email,
                 project_id,
                 invitation.token,
@@ -125,26 +137,30 @@ class UserProjectInvitationsViewset(BaseViewSet):
         return self.filter_queryset(
             super()
             .get_queryset()
-            .filter(email=self.request.user.email)
+            .filter(
+                email__iexact=self.request.user.email,
+                workspace__slug=self.kwargs.get("slug"),
+                responded_at__isnull=True,
+                project__deleted_at__isnull=True,
+            )
             .select_related("workspace", "workspace__owner", "project")
         )
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def create(self, request, slug):
-        project_ids = request.data.get("project_ids", [])
-
-        # Get the workspace user role
+        if not is_workspace_admin(request.user, slug):
+            return Response(
+                {"error": "An invitation is required to join any project."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        project_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False).run_validation(
+            request.data.get("project_ids", [])
+        )
+        project_ids = list(set(project_ids))
         workspace_member = WorkspaceMember.objects.get(member=request.user, workspace__slug=slug, is_active=True)
-
-        # Get all the projects
-        projects = Project.objects.filter(id__in=project_ids, workspace__slug=slug).only("id", "network")
-        # Check if user has permission to join each project
-        for project in projects:
-            if project.network == ProjectNetwork.SECRET.value and workspace_member.role != ROLE.ADMIN.value:
-                return Response(
-                    {"error": "Only workspace admins can join private project"},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+        projects = Project.objects.filter(id__in=project_ids, workspace__slug=slug, archived_at__isnull=True)
+        if projects.count() != len(project_ids):
+            return Response({"error": "Invalid projects"}, status=status.HTTP_400_BAD_REQUEST)
 
         workspace_role = workspace_member.role
         workspace = workspace_member.workspace
@@ -195,77 +211,54 @@ class UserProjectInvitationsViewset(BaseViewSet):
 
 
 class ProjectJoinEndpoint(BaseAPIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
+    project_invitation_endpoint = True
 
+    def get_invitation(self, request, slug, project_id, pk, *, for_update=False):
+        invites = ProjectMemberInvite.objects.select_related("project", "workspace")
+        if for_update:
+            invites = invites.select_for_update()
+        return invites.get(
+            pk=pk,
+            project_id=project_id,
+            workspace__slug=slug,
+            email__iexact=request.user.email,
+            project__deleted_at__isnull=True,
+        )
+
+    @transaction.atomic
     def post(self, request, slug, project_id, pk):
-        project_invite = ProjectMemberInvite.objects.get(pk=pk, project_id=project_id, workspace__slug=slug)
-
-        email = request.data.get("email", "")
-
-        if email == "" or project_invite.email != email:
+        project_invite = self.get_invitation(request, slug, project_id, pk, for_update=True)
+        if project_invite.responded_at is not None:
             return Response(
-                {"error": "You do not have permission to join the project"},
-                status=status.HTTP_403_FORBIDDEN,
+                {"error": "You have already responded to the invitation request"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-
-        if project_invite.responded_at is None:
-            project_invite.accepted = request.data.get("accepted", False)
-            project_invite.responded_at = timezone.now()
-            project_invite.save()
-
-            if project_invite.accepted:
-                # Check if the user account exists
-                user = User.objects.filter(email=email).first()
-
-                # Check if user is a part of workspace
-                workspace_member = WorkspaceMember.objects.filter(workspace__slug=slug, member=user).first()
-                # Add him to workspace
-                if workspace_member is None:
-                    _ = WorkspaceMember.objects.create(
-                        workspace_id=project_invite.workspace_id,
-                        member=user,
-                        role=(15 if project_invite.role >= 15 else project_invite.role),
-                    )
-                else:
-                    promote_explicit_workspace_membership(
-                        user,
-                        workspace_member.workspace,
-                        role=workspace_member.role,
-                        include_projects=False,
-                    )
-
-                # Check if the user was already a member of project then activate the user
-                project_member = ProjectMember.objects.filter(
-                    workspace_id=project_invite.workspace_id,
-                    project_id=project_id,
-                    member=user,
-                ).first()
-                if project_member is None:
-                    # Create a Project Member
-                    _ = ProjectMember.objects.create(
-                        project_id=project_id,
-                        member=user,
-                        role=project_invite.role,
-                    )
-                else:
-                    promote_explicit_project_membership(user, project_invite.project)
-
-                return Response(
-                    {"message": "Project Invitation Accepted"},
-                    status=status.HTTP_200_OK,
-                )
-
-            return Response(
-                {"message": "Project Invitation was not accepted"},
-                status=status.HTTP_200_OK,
+        if project_invite.project.archived_at is not None:
+            return Response({"error": "Archived projects cannot be joined"}, status=status.HTTP_400_BAD_REQUEST)
+        accepted = serializers.BooleanField().run_validation(request.data.get("accepted", False))
+        if accepted:
+            workspace_member = WorkspaceMember.objects.filter(
+                workspace_id=project_invite.workspace_id, member=request.user
+            ).first()
+            promote_explicit_workspace_membership(
+                request.user,
+                project_invite.workspace,
+                role=workspace_member.role if workspace_member else min(project_invite.role, ROLE.MEMBER.value),
+                include_projects=False,
             )
-
+            promote_explicit_project_membership(request.user, project_invite.project, role=project_invite.role)
+            ProjectUserProperty.objects.get_or_create(
+                project=project_invite.project, workspace=project_invite.workspace, user=request.user
+            )
+        project_invite.accepted = accepted
+        project_invite.responded_at = timezone.now()
+        project_invite.save(update_fields=["accepted", "responded_at", "updated_at"])
         return Response(
-            {"error": "You have already responded to the invitation request"},
-            status=status.HTTP_400_BAD_REQUEST,
+            {"message": "Project Invitation Accepted" if accepted else "Project Invitation was not accepted"},
+            status=status.HTTP_200_OK,
         )
 
     def get(self, request, slug, project_id, pk):
-        project_invitation = ProjectMemberInvite.objects.get(workspace__slug=slug, project_id=project_id, pk=pk)
-        serializer = ProjectMemberInviteSerializer(project_invitation)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        invitation = self.get_invitation(request, slug, project_id, pk)
+        return Response(ProjectMemberInviteSerializer(invitation).data, status=status.HTTP_200_OK)

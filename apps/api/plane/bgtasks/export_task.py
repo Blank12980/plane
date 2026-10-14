@@ -36,6 +36,8 @@ from plane.utils.porters.serializers.module_task_status import ModuleTaskStatusE
 from plane.utils.porters.serializers.task_deadline import TaskDeadlineExportSerializer, DEADLINE_HEADERS
 from plane.utils.porters.serializers.task_hours import TaskHoursExportSerializer, HOURS_HEADERS
 
+from plane.utils.project_access import projects_for_user
+
 
 def create_zip_file(files: List[tuple[str, str | bytes]]) -> io.BytesIO:
     """
@@ -163,9 +165,7 @@ def issue_export_task(
             Issue.objects.filter(
                 workspace__id=workspace_id,
                 project_id__in=project_ids,
-                project__project_projectmember__member=exporter_instance.initiated_by_id,
-                project__project_projectmember__is_active=True,
-                project__project_projectmember__deleted_at__isnull=True,
+                project__id__in=projects_for_user(exporter_instance.initiated_by, slug).values("pk"),
                 project__archived_at__isnull=True,
             )
             .select_related("project", "state")

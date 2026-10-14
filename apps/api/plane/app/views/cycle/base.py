@@ -61,6 +61,9 @@ from plane.bgtasks.webhook_task import model_activity
 from plane.utils.timezone_converter import convert_to_utc, user_timezone_converter
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class CycleViewSet(BaseViewSet):
     serializer_class = CycleSerializer
     model = Cycle
@@ -93,8 +96,7 @@ class CycleViewSet(BaseViewSet):
             .filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(project__archived_at__isnull=True)
             .select_related("project", "workspace", "owned_by")
@@ -811,10 +813,10 @@ class CycleAnalyticsEndpoint(BaseAPIView):
             )
 
         # this will tell whether the issues were transferred to the new cycle
-        """ 
+        """
         if the issues were transferred to the new cycle, then the progress_snapshot will be present
         return the progress_snapshot data in the analytics for each date
-            
+
         else issues were not transferred to the new cycle then generate the stats from the cycle issue bridge tables
         """
 

@@ -7,7 +7,7 @@ import json
 
 # Django imports
 from django.db import IntegrityError
-from django.db.models import Exists, F, Func, OuterRef, Prefetch, Q, Subquery, Count
+from django.db.models import Exists, F, Func, OuterRef, Prefetch, Subquery, Count
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.core.serializers.json import DjangoJSONEncoder
@@ -40,6 +40,7 @@ from plane.db.models import (
 from plane.bgtasks.webhook_task import model_activity, webhook_activity
 from .base import BaseAPIView
 from plane.utils.host import base_host
+from plane.utils.project_access import projects_for_user, project_list_data
 from plane.api.serializers import (
     ProjectSerializer,
     ProjectCreateSerializer,
@@ -81,14 +82,7 @@ class ProjectListCreateAPIEndpoint(BaseAPIView):
 
     def get_queryset(self):
         return (
-            Project.objects.filter(workspace__slug=self.kwargs.get("slug"))
-            .filter(
-                Q(
-                    project_projectmember__member=self.request.user,
-                    project_projectmember__is_active=True,
-                )
-                | Q(network=2)
-            )
+            projects_for_user(self.request.user, self.kwargs.get("slug"), include_public=True)
             .select_related("project_lead")
             .annotate(
                 is_member=Exists(
@@ -188,8 +182,8 @@ class ProjectListCreateAPIEndpoint(BaseAPIView):
         return self.paginate(
             request=request,
             queryset=(projects),
-            on_results=lambda projects: (
-                ProjectSerializer(projects, many=True, fields=self.fields, expand=self.expand).data
+            on_results=lambda projects: project_list_data(
+                request.user, slug, ProjectSerializer(projects, many=True, fields=self.fields, expand=self.expand).data
             ),
         )
 
@@ -296,14 +290,7 @@ class ProjectDetailAPIEndpoint(BaseAPIView):
 
     def get_queryset(self):
         return (
-            Project.objects.filter(workspace__slug=self.kwargs.get("slug"))
-            .filter(
-                Q(
-                    project_projectmember__member=self.request.user,
-                    project_projectmember__is_active=True,
-                )
-                | Q(network=2)
-            )
+            projects_for_user(self.request.user, self.kwargs.get("slug"))
             .select_related("workspace", "workspace__owner", "default_assignee", "project_lead")
             .annotate(
                 is_member=Exists(

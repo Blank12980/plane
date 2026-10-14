@@ -50,6 +50,7 @@ from plane.app.serializers import (
     InviteLinkMessengerSerializer,
 )
 from .base import BaseAPIView
+from plane.utils.project_access import projects_for_user, require_project_access
 
 
 class ChatListCreateAPIEndpoint(BaseAPIView):
@@ -77,6 +78,7 @@ class ChatListCreateAPIEndpoint(BaseAPIView):
 
         chats = (
             ChatMessenger.objects.filter(id__in=member_chat_ids)
+            .filter(Q(project__isnull=True) | Q(project_id__in=projects_for_user(user).values("pk")))
             .exclude(id__in=deleted_chat_ids)
             .annotate(
                 last_message_time=Max("messages__created_at"),
@@ -192,7 +194,7 @@ class ProjectTeamChatAPIEndpoint(BaseAPIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        if not ProjectMember.objects.filter(project=project, member=user, is_active=True).exists():
+        if not projects_for_user(user).filter(pk=project_id).exists():
             return Response(
                 {"error": "Access denied"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -934,6 +936,7 @@ class MessengerContactsAPIEndpoint(BaseAPIView):
         user_ids = (
             ProjectMember.objects.filter(
                 project__workspace_id__in=workspace_ids,
+                project_id__in=projects_for_user(request.user).values("pk"),
                 is_active=True,
             )
             .values_list("member_id", flat=True)
@@ -1140,6 +1143,8 @@ class ChatInviteJoinAPIEndpoint(BaseAPIView):
             return Response({"error": "Invite link usage limit exceeded"}, status=status.HTTP_400_BAD_REQUEST)
 
         chat = link.chat
+        if chat.project_id:
+            require_project_access(request.user, None, chat.project_id)
         # Check if already member
         if ChatMemberMessenger.objects.filter(chat=chat, user=request.user, is_active=True).exists():
             InviteLinkUseMessenger.objects.create(
@@ -1200,6 +1205,8 @@ class ChatJoinByLinkAPIEndpoint(BaseAPIView):
             )
 
         # Check if already a member
+        if chat.project_id:
+            require_project_access(request.user, None, chat.project_id)
         if ChatMemberMessenger.objects.filter(chat=chat, user=request.user, is_active=True).exists():
             serializer = ChatMessengerSerializer(chat, context={"request": request})
             return Response(serializer.data, status=status.HTTP_200_OK)

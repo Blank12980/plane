@@ -52,6 +52,9 @@ from plane.utils.analytics_events import WORKSPACE_CREATED, WORKSPACE_DELETED
 from plane.utils.csv_utils import sanitize_csv_row
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class WorkSpaceViewSet(BaseViewSet):
     model = Workspace
     serializer_class = WorkSpaceSerializer
@@ -275,6 +278,7 @@ class UserWorkspaceDashboardEndpoint(BaseAPIView):
             IssueActivity.objects.filter(
                 actor=request.user,
                 workspace__slug=slug,
+                project_id__in=projects_for_user(request.user, slug).values("pk"),
                 created_at__date__gte=date.today() + relativedelta(months=-3),
             )
             .annotate(created_date=Cast("created_at", DateField()))
@@ -289,6 +293,7 @@ class UserWorkspaceDashboardEndpoint(BaseAPIView):
             Issue.issue_objects.filter(
                 assignees__in=[request.user],
                 workspace__slug=slug,
+                project_id__in=projects_for_user(request.user, slug).values("pk"),
                 completed_at__month=month,
                 completed_at__isnull=False,
             )
@@ -299,27 +304,43 @@ class UserWorkspaceDashboardEndpoint(BaseAPIView):
             .order_by("week_in_month")
         )
 
-        assigned_issues = Issue.issue_objects.filter(workspace__slug=slug, assignees__in=[request.user]).count()
+        assigned_issues = Issue.issue_objects.filter(
+            workspace__slug=slug,
+            project_id__in=projects_for_user(request.user, slug).values("pk"),
+            assignees__in=[request.user],
+        ).count()
 
         pending_issues_count = Issue.issue_objects.filter(
             ~Q(state__group__in=["completed", "cancelled"]),
             workspace__slug=slug,
+            project_id__in=projects_for_user(request.user, slug).values("pk"),
             assignees__in=[request.user],
         ).count()
 
         completed_issues_count = Issue.issue_objects.filter(
-            workspace__slug=slug, assignees__in=[request.user], state__group="completed"
+            workspace__slug=slug,
+            project_id__in=projects_for_user(request.user, slug).values("pk"),
+            assignees__in=[request.user],
+            state__group="completed",
         ).count()
 
         issues_due_week = (
-            Issue.issue_objects.filter(workspace__slug=slug, assignees__in=[request.user])
+            Issue.issue_objects.filter(
+                workspace__slug=slug,
+                project_id__in=projects_for_user(request.user, slug).values("pk"),
+                assignees__in=[request.user],
+            )
             .annotate(target_week=ExtractWeek("target_date"))
             .filter(target_week=timezone.now().date().isocalendar()[1])
             .count()
         )
 
         state_distribution = (
-            Issue.issue_objects.filter(workspace__slug=slug, assignees__in=[request.user])
+            Issue.issue_objects.filter(
+                workspace__slug=slug,
+                project_id__in=projects_for_user(request.user, slug).values("pk"),
+                assignees__in=[request.user],
+            )
             .annotate(state_group=F("state__group"))
             .values("state_group")
             .annotate(state_count=Count("state_group"))
@@ -329,6 +350,7 @@ class UserWorkspaceDashboardEndpoint(BaseAPIView):
         overdue_issues = Issue.issue_objects.filter(
             ~Q(state__group__in=["completed", "cancelled"]),
             workspace__slug=slug,
+            project_id__in=projects_for_user(request.user, slug).values("pk"),
             assignees__in=[request.user],
             target_date__lt=timezone.now(),
             completed_at__isnull=True,
@@ -338,6 +360,7 @@ class UserWorkspaceDashboardEndpoint(BaseAPIView):
             ~Q(state__group__in=["completed", "cancelled"]),
             start_date__gte=timezone.now(),
             workspace__slug=slug,
+            project_id__in=projects_for_user(request.user, slug).values("pk"),
             assignees__in=[request.user],
             completed_at__isnull=True,
         ).values("id", "name", "workspace__slug", "project_id", "start_date")
@@ -394,8 +417,7 @@ class ExportWorkspaceUserActivityEndpoint(BaseAPIView):
             ~Q(field__in=["comment", "vote", "reaction", "draft"]),
             workspace__slug=slug,
             created_at__date=request.data.get("date"),
-            project__project_projectmember__member=request.user,
-            project__project_projectmember__is_active=True,
+            project_id__in=projects_for_user(request.user, self.kwargs.get("slug")).values("pk"),
             actor_id=user_id,
         ).select_related("actor", "workspace", "issue", "project")[:10000]
 

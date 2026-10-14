@@ -8,12 +8,11 @@ import React, { useRef, useState } from "react";
 import { observer } from "mobx-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArchiveRestoreIcon, Settings, UserPlus } from "lucide-react";
+import { ArchiveRestoreIcon, Settings, LogOut } from "lucide-react";
 // gizmo imports
 import { EUserPermissions, EUserPermissionsLevel, IS_FAVORITE_MENU_OPEN } from "@plane/constants";
 import { useLocalStorage } from "@plane/hooks";
 import { useTranslation } from "@plane/i18n";
-import { Button } from "@plane/propel/button";
 import { Logo } from "@plane/propel/emoji-icon-picker";
 import { LinkIcon, LockIcon, NewTabIcon, TrashIcon, CheckIcon } from "@plane/propel/icons";
 import { setPromiseToast, setToast, TOAST_TYPE } from "@plane/propel/toast";
@@ -26,13 +25,13 @@ import { copyUrlToClipboard, cn, getFileURL, renderFormattedDate } from "@plane/
 // hooks
 import { useMember } from "@/hooks/store/use-member";
 import { useProject } from "@/hooks/store/use-project";
-import { useUserPermissions } from "@/hooks/store/user";
+import { useUser, useUserPermissions } from "@/hooks/store/user";
 import { useAppRouter } from "@/hooks/use-app-router";
 import { usePlatformOS } from "@/hooks/use-platform-os";
 // local imports
 import { CoverImage } from "@/components/common/cover-image";
 import { DeleteProjectModal } from "./delete-project-modal";
-import { JoinProjectModal } from "./join-project-modal";
+import { LeaveProjectModal } from "./leave-project-modal";
 import { ArchiveRestoreProjectModal } from "./archive-restore-modal";
 
 type Props = {
@@ -43,7 +42,7 @@ export const ProjectCard = observer(function ProjectCard(props: Props) {
   const { project } = props;
   // states
   const [deleteProjectModalOpen, setDeleteProjectModal] = useState(false);
-  const [joinProjectModalOpen, setJoinProjectModal] = useState(false);
+  const [leaveProjectModalOpen, setLeaveProjectModal] = useState(false);
   const [restoreProject, setRestoreProject] = useState(false);
   // refs
   const projectCardRef = useRef(null);
@@ -54,18 +53,26 @@ export const ProjectCard = observer(function ProjectCard(props: Props) {
   const { getUserDetails } = useMember();
   const { addProjectToFavorites, removeProjectFromFavorites } = useProject();
   const { allowPermissions } = useUserPermissions();
+  const { data: currentUser } = useUser();
   // hooks
   const { isMobile } = usePlatformOS();
   const { t } = useTranslation();
   // derived values
   const projectMembersIds = project.members;
-  const shouldRenderFavorite = allowPermissions(
-    [EUserPermissions.ADMIN, EUserPermissions.MEMBER],
-    EUserPermissionsLevel.WORKSPACE
+  const isWorkspaceAdmin = allowPermissions([EUserPermissions.ADMIN], EUserPermissionsLevel.WORKSPACE);
+  const hasProjectAdminAccess = allowPermissions(
+    [EUserPermissions.ADMIN],
+    EUserPermissionsLevel.PROJECT,
+    workspaceSlug?.toString(),
+    project.id
   );
+  const isMemberOfProject = !!project.member_role || isWorkspaceAdmin || hasProjectAdminAccess;
+  const canLeaveProject = !!currentUser?.id && !!project.members?.includes(currentUser.id);
+  const shouldRenderFavorite =
+    isMemberOfProject &&
+    allowPermissions([EUserPermissions.ADMIN, EUserPermissions.MEMBER], EUserPermissionsLevel.WORKSPACE);
   // auth
-  const isMemberOfProject = !!project.member_role;
-  const hasAdminRole = project.member_role === EUserPermissions.ADMIN;
+  const hasAdminRole = isWorkspaceAdmin || hasProjectAdminAccess || project.member_role === EUserPermissions.ADMIN;
   const hasMemberRole = project.member_role === EUserPermissions.MEMBER;
   // archive
   const isArchived = !!project.archived_at;
@@ -133,11 +140,11 @@ export const ProjectCard = observer(function ProjectCard(props: Props) {
       shouldRender: !isArchived && (hasAdminRole || hasMemberRole),
     },
     {
-      key: "join",
-      action: () => setJoinProjectModal(true),
-      title: "Присоединиться",
-      icon: UserPlus,
-      shouldRender: !isMemberOfProject && !isArchived,
+      key: "leave",
+      action: () => setLeaveProjectModal(true),
+      title: "Покинуть проект",
+      icon: LogOut,
+      shouldRender: canLeaveProject && !isArchived,
     },
     {
       key: "open-new-tab",
@@ -177,15 +184,7 @@ export const ProjectCard = observer(function ProjectCard(props: Props) {
         isOpen={deleteProjectModalOpen}
         onClose={() => setDeleteProjectModal(false)}
       />
-      {/* Join Project Modal */}
-      {workspaceSlug && (
-        <JoinProjectModal
-          workspaceSlug={workspaceSlug.toString()}
-          project={project}
-          isOpen={joinProjectModalOpen}
-          handleClose={() => setJoinProjectModal(false)}
-        />
-      )}
+      <LeaveProjectModal project={project} isOpen={leaveProjectModalOpen} onClose={() => setLeaveProjectModal(false)} />
       {/* Restore project modal */}
       {workspaceSlug && project && (
         <ArchiveRestoreProjectModal
@@ -203,7 +202,12 @@ export const ProjectCard = observer(function ProjectCard(props: Props) {
           if (!isMemberOfProject || isArchived) {
             e.preventDefault();
             e.stopPropagation();
-            if (!isArchived) setJoinProjectModal(true);
+            if (!isArchived)
+              setToast({
+                type: TOAST_TYPE.INFO,
+                title: "Доступ по приглашению",
+                message: "Попросите администратора проекта пригласить вас.",
+              });
           }
         }}
         data-prevent-progress={!isMemberOfProject || isArchived}
@@ -351,21 +355,7 @@ export const ProjectCard = observer(function ProjectCard(props: Props) {
                       Joined
                     </span>
                   ))}
-                {!isMemberOfProject && (
-                  <div className="flex items-center">
-                    <Button
-                      variant="link"
-                      className="!p-0 font-semibold"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setJoinProjectModal(true);
-                      }}
-                    >
-                      Join
-                    </Button>
-                  </div>
-                )}
+                {!isMemberOfProject && <span className="text-13 text-placeholder">По приглашению</span>}
               </>
             )}
           </div>

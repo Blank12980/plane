@@ -146,7 +146,10 @@ export const ProjectAuthWrapper = observer(function ProjectAuthWrapper(props: IP
 
   if (isProjectLoading) return null;
 
-  if (!isProjectLoading && hasPermissionToCurrentProject === false) {
+  if (
+    !isProjectLoading &&
+    (hasPermissionToCurrentProject === false || [403, 404, 409].includes(projectDetailsError?.status))
+  ) {
     return (
       <ProjectAccessRestriction
         errorStatusCode={projectDetailsError?.status}

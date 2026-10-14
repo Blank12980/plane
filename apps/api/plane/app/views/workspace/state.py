@@ -14,6 +14,9 @@ from plane.app.permissions import WorkspaceEntityPermission
 from collections import defaultdict
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class WorkspaceStatesEndpoint(BaseAPIView):
     permission_classes = [WorkspaceEntityPermission]
     use_read_replica = True
@@ -21,8 +24,7 @@ class WorkspaceStatesEndpoint(BaseAPIView):
     def get(self, request, slug):
         states = State.objects.filter(
             workspace__slug=slug,
-            project__project_projectmember__member=request.user,
-            project__project_projectmember__is_active=True,
+            project_id__in=projects_for_user(request.user, self.kwargs.get("slug")).values("pk"),
             project__archived_at__isnull=True,
             is_triage=False,
         )

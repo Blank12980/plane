@@ -49,6 +49,9 @@ from plane.utils.filters import ComplexFilterBackend
 from plane.utils.filters import IssueFilterSet
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class WorkspaceViewViewSet(BaseViewSet):
     serializer_class = IssueViewSerializer
     model = IssueView
@@ -157,8 +160,7 @@ class WorkspaceViewIssuesViewSet(BaseViewSet):
             |
             # For other roles (role > 5), show all issues
             Q(project__project_projectmember__role__gt=5),
-            project__project_projectmember__member=self.request.user,
-            project__project_projectmember__is_active=True,
+            project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
         )
 
     def apply_annotations(self, issues):
@@ -274,8 +276,7 @@ class IssueViewViewSet(BaseViewSet):
             .filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
                 project__archived_at__isnull=True,
             )
             .filter(Q(owned_by=self.request.user) | Q(access=1))
@@ -310,7 +311,7 @@ class IssueViewViewSet(BaseViewSet):
         issue_view = self.get_queryset().filter(pk=pk, project_id=project_id).first()
         project = Project.objects.get(id=project_id)
         """
-        if the role is guest and guest_view_all_features is false and owned by is not 
+        if the role is guest and guest_view_all_features is false and owned by is not
         the requesting user then dont show the view
         """
 

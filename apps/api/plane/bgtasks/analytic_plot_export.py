@@ -18,7 +18,8 @@ from django.db import models
 from django.db.models.functions import Concat
 
 # Module imports
-from plane.db.models import Issue
+from plane.db.models import Issue, User
+from plane.utils.project_access import projects_for_user
 from plane.license.utils.instance_value import get_email_configuration
 from plane.utils.analytics_plot import build_graph_plot
 from plane.utils.email import generate_plain_text_from_html
@@ -350,6 +351,11 @@ def generate_non_segmented_rows(
 def analytic_export_task(email, data, slug):
     try:
         filters = issue_filters(data, "POST")
+        user = User.objects.get(email=email)
+        allowed_projects = projects_for_user(user, slug)
+        if "project_id__in" in filters:
+            allowed_projects = allowed_projects.filter(pk__in=filters["project_id__in"])
+        filters["project_id__in"] = allowed_projects.values("pk")
         queryset = Issue.issue_objects.filter(**filters, workspace__slug=slug)
 
         x_axis = data.get("x_axis", False)

@@ -73,6 +73,9 @@ from plane.utils.openapi import (
 )
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class ModuleListCreateAPIEndpoint(BaseAPIView):
     """Module List and Create Endpoint"""
 
@@ -270,9 +273,9 @@ class ModuleListCreateAPIEndpoint(BaseAPIView):
         return self.paginate(
             request=request,
             queryset=(self.get_queryset().filter(archived_at__isnull=True)),
-            on_results=lambda modules: ModuleSerializer(
-                modules, many=True, fields=self.fields, expand=self.expand
-            ).data,
+            on_results=lambda modules: (
+                ModuleSerializer(modules, many=True, fields=self.fields, expand=self.expand).data
+            ),
         )
 
 
@@ -554,8 +557,7 @@ class ModuleIssueListCreateAPIEndpoint(BaseAPIView):
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(module_id=self.kwargs.get("module_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(project__archived_at__isnull=True)
             .select_related("project")
@@ -760,8 +762,7 @@ class ModuleIssueDetailAPIEndpoint(BaseAPIView):
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(module_id=self.kwargs.get("module_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(project__archived_at__isnull=True)
             .select_related("project")
@@ -1012,9 +1013,9 @@ class ModuleArchiveUnarchiveAPIEndpoint(BaseAPIView):
         return self.paginate(
             request=request,
             queryset=(self.get_queryset()),
-            on_results=lambda modules: ModuleSerializer(
-                modules, many=True, fields=self.fields, expand=self.expand
-            ).data,
+            on_results=lambda modules: (
+                ModuleSerializer(modules, many=True, fields=self.fields, expand=self.expand).data
+            ),
         )
 
     @module_docs(

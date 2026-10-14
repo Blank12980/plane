@@ -18,6 +18,7 @@ from plane.app.serializers import LabelSerializer
 from plane.app.permissions import allow_permission, ProjectBasePermission, ROLE
 from plane.db.models import Project, Label
 from plane.utils.cache import invalidate_cache
+from plane.utils.project_access import projects_for_user
 
 
 class LabelViewSet(BaseViewSet):
@@ -31,7 +32,7 @@ class LabelViewSet(BaseViewSet):
             .get_queryset()
             .filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
-            .filter(project__project_projectmember__member=self.request.user)
+            .filter(project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"))
             .select_related("project")
             .select_related("workspace")
             .select_related("parent")

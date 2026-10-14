@@ -122,10 +122,9 @@ export abstract class BaseUserPermissionStore implements IBaseUserPermissionStor
   protected getProjectRole = computedFn((workspaceSlug: string, projectId?: string): EUserPermissions | undefined => {
     if (!workspaceSlug || !projectId) return undefined;
     const projectRole = this.workspaceProjectsPermissions?.[workspaceSlug]?.[projectId];
-    if (!projectRole) return undefined;
     const workspaceRole = this.workspaceUserInfo?.[workspaceSlug]?.role;
     if (workspaceRole === EUserWorkspaceRoles.ADMIN) return EUserPermissions.ADMIN;
-    else return projectRole;
+    else return projectRole || undefined;
   });
 
   /**
@@ -346,6 +345,10 @@ export abstract class BaseUserPermissionStore implements IBaseUserPermissionStor
         unset(this.workspaceProjectsPermissions, [workspaceSlug, projectId]);
         unset(this.projectUserInfo, [workspaceSlug, projectId]);
         unset(this.store.projectRoot.project.projectMap, [projectId]);
+        this.store.favorite.removeFavoriteFromStore(projectId);
+      });
+      await this.store.projectRoot.project.fetchProjects(workspaceSlug).catch((error: unknown) => {
+        console.error("Failed to refresh project list after leaving", error);
       });
     } catch (error) {
       console.error("Error user leaving the project", error);

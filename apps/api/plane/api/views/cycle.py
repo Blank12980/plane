@@ -77,6 +77,9 @@ from plane.utils.openapi import (
 )
 
 
+from plane.utils.project_access import projects_for_user
+
+
 class CycleListCreateAPIEndpoint(BaseAPIView):
     """Cycle List and Create Endpoint"""
 
@@ -91,8 +94,7 @@ class CycleListCreateAPIEndpoint(BaseAPIView):
             Cycle.objects.filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .select_related("project")
             .select_related("workspace")
@@ -215,13 +217,15 @@ class CycleListCreateAPIEndpoint(BaseAPIView):
             return self.paginate(
                 request=request,
                 queryset=(queryset),
-                on_results=lambda cycles: CycleSerializer(
-                    cycles,
-                    many=True,
-                    fields=self.fields,
-                    expand=self.expand,
-                    context={"project": project},
-                ).data,
+                on_results=lambda cycles: (
+                    CycleSerializer(
+                        cycles,
+                        many=True,
+                        fields=self.fields,
+                        expand=self.expand,
+                        context={"project": project},
+                    ).data
+                ),
             )
 
         # Completed Cycles
@@ -230,13 +234,15 @@ class CycleListCreateAPIEndpoint(BaseAPIView):
             return self.paginate(
                 request=request,
                 queryset=(queryset),
-                on_results=lambda cycles: CycleSerializer(
-                    cycles,
-                    many=True,
-                    fields=self.fields,
-                    expand=self.expand,
-                    context={"project": project},
-                ).data,
+                on_results=lambda cycles: (
+                    CycleSerializer(
+                        cycles,
+                        many=True,
+                        fields=self.fields,
+                        expand=self.expand,
+                        context={"project": project},
+                    ).data
+                ),
             )
 
         # Draft Cycles
@@ -245,13 +251,15 @@ class CycleListCreateAPIEndpoint(BaseAPIView):
             return self.paginate(
                 request=request,
                 queryset=(queryset),
-                on_results=lambda cycles: CycleSerializer(
-                    cycles,
-                    many=True,
-                    fields=self.fields,
-                    expand=self.expand,
-                    context={"project": project},
-                ).data,
+                on_results=lambda cycles: (
+                    CycleSerializer(
+                        cycles,
+                        many=True,
+                        fields=self.fields,
+                        expand=self.expand,
+                        context={"project": project},
+                    ).data
+                ),
             )
 
         # Incomplete Cycles
@@ -260,24 +268,28 @@ class CycleListCreateAPIEndpoint(BaseAPIView):
             return self.paginate(
                 request=request,
                 queryset=(queryset),
-                on_results=lambda cycles: CycleSerializer(
+                on_results=lambda cycles: (
+                    CycleSerializer(
+                        cycles,
+                        many=True,
+                        fields=self.fields,
+                        expand=self.expand,
+                        context={"project": project},
+                    ).data
+                ),
+            )
+        return self.paginate(
+            request=request,
+            queryset=(queryset),
+            on_results=lambda cycles: (
+                CycleSerializer(
                     cycles,
                     many=True,
                     fields=self.fields,
                     expand=self.expand,
                     context={"project": project},
-                ).data,
-            )
-        return self.paginate(
-            request=request,
-            queryset=(queryset),
-            on_results=lambda cycles: CycleSerializer(
-                cycles,
-                many=True,
-                fields=self.fields,
-                expand=self.expand,
-                context={"project": project},
-            ).data,
+                ).data
+            ),
         )
 
     @cycle_docs(
@@ -371,8 +383,7 @@ class CycleDetailAPIEndpoint(BaseAPIView):
             Cycle.objects.filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .select_related("project")
             .select_related("workspace")
@@ -618,8 +629,7 @@ class CycleArchiveUnarchiveAPIEndpoint(BaseAPIView):
             Cycle.objects.filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(archived_at__isnull=False)
             .select_related("project")
@@ -817,8 +827,7 @@ class CycleIssueListCreateAPIEndpoint(BaseAPIView):
             .filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(cycle_id=self.kwargs.get("cycle_id"))
             .select_related("project")
@@ -1029,8 +1038,7 @@ class CycleIssueDetailAPIEndpoint(BaseAPIView):
             .filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(
-                project__project_projectmember__member=self.request.user,
-                project__project_projectmember__is_active=True,
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
             )
             .filter(cycle_id=self.kwargs.get("cycle_id"))
             .select_related("project")
