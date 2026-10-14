@@ -51,6 +51,9 @@ catalogs:
     axios:
       specifier: 1.13.5
       version: 1.13.5
+    jsdom:
+      specifier: 26.1.0
+      version: 26.1.0
     lucide-react:
       specifier: 0.469.0
       version: 0.469.0
@@ -81,6 +84,9 @@ catalogs:
     uuid:
       specifier: 13.0.0
       version: 13.0.0
+    vitest:
+      specifier: 4.0.15
+      version: 4.0.15
 
 overrides:
   express: 4.22.0
@@ -751,6 +757,9 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 18.3.1
+      jsdom:
+        specifier: 'catalog:'
+        version: 26.1.0
       typescript:
         specifier: 5.8.3
         version: 5.8.3
@@ -760,6 +769,9 @@ importers:
       vite-tsconfig-paths:
         specifier: ^5.1.4
         version: 5.1.4(typescript@5.8.3)(vite@7.3.1(@types/node@22.12.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.43.1)(yaml@2.8.1))
+      vitest:
+        specifier: 'catalog:'
+        version: 4.0.15(@opentelemetry/api@1.9.0)(@types/node@22.12.0)(jiti@2.6.1)(jsdom@26.1.0)(lightningcss@1.30.2)(terser@5.43.1)(yaml@2.8.1)
 
   packages/codemods:
     devDependencies:

@@ -130,7 +130,7 @@ export const IssueWorkLogModal = observer(function IssueWorkLogModal(props: Prop
 
   return (
     <ModalCore isOpen={isOpen} handleClose={onClose} position={EModalPosition.TOP} width={EModalWidth.XXL}>
-      <div className="space-y-4 p-5">
+      <div className="space-y-4 p-5" data-prevent-outside-click>
         <div className="flex items-baseline justify-between gap-4">
           <h3 className="text-h5-medium text-primary">{t("worklog.title")}</h3>
           <span className="text-body-sm-medium text-secondary">
