@@ -14,6 +14,7 @@ from rest_framework import serializers
 # Module imports
 from .base import BaseSerializer, DynamicBaseSerializer
 from plane.utils.issue_dates import validate_issue_dates
+from plane.utils.comment_threads import CommentThreadValidationMixin
 from .user import UserLiteSerializer
 from .state import StateLiteSerializer
 from .project import ProjectLiteSerializer
@@ -730,7 +731,7 @@ class IssueVoteSerializer(BaseSerializer):
         read_only_fields = fields
 
 
-class IssueCommentSerializer(BaseSerializer):
+class IssueCommentSerializer(CommentThreadValidationMixin, BaseSerializer):
     actor_detail = UserLiteSerializer(read_only=True, source="actor")
     issue_detail = IssueFlatSerializer(read_only=True, source="issue")
     project_detail = ProjectLiteSerializer(read_only=True, source="project")
@@ -754,6 +755,7 @@ class IssueCommentSerializer(BaseSerializer):
             "workspace",
             "project",
             "issue",
+            "actor",
             "created_by",
             "updated_by",
             "created_at",

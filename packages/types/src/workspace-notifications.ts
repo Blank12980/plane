@@ -28,8 +28,10 @@ export type TNotificationIssueLite = {
 };
 
 export type TNotificationData = {
-  issue: TNotificationIssueLite | undefined;
-  issue_activity: {
+  module?: { id: string; name: string };
+  time_budget?: { month: string; limit_minutes: number; total_minutes: number };
+  issue?: TNotificationIssueLite;
+  issue_activity?: {
     id: string | undefined;
     actor: string | undefined;
     field: string | undefined;
@@ -93,6 +95,7 @@ export type TNotificationPaginatedInfo = {
 
 // notification count
 export type TUnreadNotificationsCount = {
+  recent_notifications?: TNotification[];
   total_unread_notifications_count: number;
   mention_unread_notifications_count: number;
 };

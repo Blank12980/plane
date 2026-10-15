@@ -12,6 +12,7 @@ import useSWR from "swr";
 import { LogoSpinner } from "@/components/common/logo-spinner";
 // helpers
 import { EPageTypes } from "@/helpers/authentication.helper";
+import { getWorkspaceHomeUrl } from "@/helpers/workspace-redirect";
 // hooks
 import { useWorkspace } from "@/hooks/store/use-workspace";
 import { useUser, useUserProfile, useUserSettings } from "@/hooks/store/user";
@@ -56,12 +57,9 @@ export const AuthenticationWrapper = observer(function AuthenticationWrapper(pro
     false;
 
   const getWorkspaceRedirectionUrl = (): string => {
-    let redirectionRoute = "/create-workspace";
-
     // validating the nextPath from the router query
     if (nextPath && isValidURL(nextPath.toString())) {
-      redirectionRoute = nextPath.toString();
-      return redirectionRoute;
+      return nextPath.toString();
     }
 
     // validate the last and fallback workspace_slug
@@ -69,13 +67,7 @@ export const AuthenticationWrapper = observer(function AuthenticationWrapper(pro
       currentUserSettings?.workspace?.last_workspace_slug || currentUserSettings?.workspace?.fallback_workspace_slug;
 
     // validate the current workspace_slug is available in the user's workspace list
-    const isCurrentWorkspaceValid = Object.values(workspaces || {}).findIndex(
-      (workspace) => workspace.slug === currentWorkspaceSlug
-    );
-
-    if (isCurrentWorkspaceValid >= 0) redirectionRoute = `/${currentWorkspaceSlug}`;
-
-    return redirectionRoute;
+    return getWorkspaceHomeUrl(workspaces || {}, currentWorkspaceSlug, currentUser?.is_instance_admin);
   };
 
   if ((isUserSWRLoading || isUserLoading || workspacesLoader) && !currentUser?.id)

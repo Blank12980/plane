@@ -13,7 +13,17 @@ from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.views import APIView
 
-from plane.db.models import Page, ProjectPage, Project, ProjectMember, User, Workspace, WorkspaceMember
+from plane.db.models import (
+    ClientAccessGrant,
+    Issue,
+    Page,
+    ProjectPage,
+    Project,
+    ProjectMember,
+    User,
+    Workspace,
+    WorkspaceMember,
+)
 from plane.utils.core import clear_read_replica_context, set_use_read_replica, should_use_read_replica
 from plane.utils.project_access import (
     ProjectAccessMixin,
@@ -144,6 +154,78 @@ class GuardedView(ProjectAccessMixin, APIView):
         return Response({"ok": True})
 
     post = get
+    patch = get
+    put = get
+    delete = get
+
+
+def make_client(access_scope):
+    user, workspace, workspace_member, _, _, joined, membership = access_scope
+    WorkspaceMember.objects.filter(pk=workspace_member.pk).update(role=3)
+    ProjectMember.objects.filter(pk=membership.pk).update(role=3)
+    issue = Issue(workspace=workspace, project=joined, name="Shared", sequence_id=1)
+    Issue.objects.bulk_create([issue])
+    ClientAccessGrant.objects.create(workspace=workspace, project=joined, client=user, issue=issue)
+    return user, workspace, joined, membership
+
+
+def test_clients_cannot_discover_unshared_public_projects(access_scope):
+    user, workspace, joined, _ = make_client(access_scope)
+    assert ids(projects_for_user(user, workspace.slug, include_public=True)) == set()
+    assert ids(projects_for_user(user, include_public=True)) == set()
+
+
+@pytest.mark.parametrize("method", ["post", "patch", "put", "delete"])
+def test_client_guard_rejects_all_project_mutations(access_scope, method):
+    user, workspace, joined, membership = make_client(access_scope)
+    # A stale or incorrectly imported high project role cannot defeat the cap.
+    ProjectMember.objects.filter(pk=membership.pk).update(role=20)
+    request = getattr(APIRequestFactory(), method)("/project/", {}, format="json")
+    force_authenticate(request, user=user)
+    response = GuardedView.as_view()(request, slug=workspace.slug, project_id=joined.id)
+    assert response.status_code == 403
+    assert not has_project_role(user, workspace.slug, joined.id, [20, 15])
+    assert not has_project_role(user, workspace.slug, joined.id, [3])
+
+
+def test_client_guard_blocks_general_project_api_even_with_a_shared_resource(access_scope):
+    user, workspace, joined, _ = make_client(access_scope)
+    request = APIRequestFactory().get("/project/")
+    force_authenticate(request, user=user)
+    assert GuardedView.as_view()(request, slug=workspace.slug, project_id=joined.id).status_code == 403
+
+
+def test_client_cannot_turn_workspace_endpoint_into_project_endpoint_with_query_parameter(access_scope):
+    user, workspace, joined, _ = make_client(access_scope)
+    request = APIRequestFactory().get(f"/workspace/?project_id={joined.id}")
+    force_authenticate(request, user=user)
+    assert GuardedView.as_view()(request, slug=workspace.slug).status_code == 403
+
+
+def test_client_cannot_write_another_members_preferences(access_scope):
+    class PreferencesView(GuardedView):
+        client_self_service_methods = ("PATCH",)
+
+    user, workspace, joined, _ = make_client(access_scope)
+    request = APIRequestFactory().patch("/preferences/", {}, format="json")
+    force_authenticate(request, user=user)
+    response = PreferencesView.as_view()(request, slug=workspace.slug, project_id=joined.id, member_id=uuid4())
+    assert response.status_code == 403
+
+
+def test_instance_admin_retains_full_access_with_client_membership(access_scope):
+    user, workspace, joined, _ = make_client(access_scope)
+    instance = Instance.objects.create(
+        instance_name="Client instance",
+        instance_id="client-instance",
+        current_version="test",
+        last_checked_at=timezone.now(),
+    )
+    InstanceAdmin.objects.create(instance=instance, user=user, role=15)
+    assert ids(projects_for_user(user, workspace.slug)) == {project.id for project in access_scope[3:6]}
+    request = APIRequestFactory().post("/project/", {}, format="json")
+    force_authenticate(request, user=user)
+    assert GuardedView.as_view()(request, slug=workspace.slug, project_id=joined.id).status_code == 200
 
 
 @pytest.mark.parametrize("method", ["get", "post"])

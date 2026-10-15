@@ -21,6 +21,7 @@ from django.db.models import (
     IntegerField,
 )
 from django.http import StreamingHttpResponse
+from django.shortcuts import get_object_or_404
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.contrib.postgres.fields import ArrayField
 from django.db.models.functions import Coalesce
@@ -36,7 +37,7 @@ from plane.app.serializers import (
     PageDetailSerializer,
     PageBinaryUpdateSerializer,
 )
-from plane.utils.project_access import projects_for_user
+from plane.utils.project_access import has_project_role, projects_for_user
 from plane.db.models import (
     Page,
     PageLog,
@@ -71,6 +72,19 @@ def unarchive_archive_page_and_descendants(page_id, archived_at):
     # Execute the SQL query
     with connection.cursor() as cursor:
         cursor.execute(sql, [page_id, archived_at])
+
+
+class PageCollaborationAccessEndpoint(BaseAPIView):
+    permission_classes = [ProjectPagePermission]
+
+    def get(self, request, slug, project_id, page_id):
+        page = get_object_or_404(Page, id=page_id, workspace__slug=slug)
+        can_edit = (
+            not page.is_locked
+            and not page.archived_at
+            and (page.owned_by_id == request.user.id or has_project_role(request.user, slug, project_id, [20, 15]))
+        )
+        return Response({"read_only": not can_edit})
 
 
 class PageViewSet(BaseViewSet):

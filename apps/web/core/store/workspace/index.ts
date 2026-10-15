@@ -16,6 +16,7 @@ import type {
 } from "@plane/types";
 // services
 import { WorkspaceService } from "@/services/workspace.service";
+import { getWorkspaceHomeUrl } from "@/helpers/workspace-redirect";
 // store
 import type { CoreRootStore } from "@/store/root.store";
 // sub-stores
@@ -127,19 +128,13 @@ export abstract class BaseWorkspaceRootStore implements IWorkspaceRootStore {
    * get the workspace redirection url based on the last and fallback workspace_slug
    */
   getWorkspaceRedirectionUrl = () => {
-    let redirectionRoute = "/create-workspace";
     // validate the last and fallback workspace_slug
     const currentWorkspaceSlug =
       this.user.userSettings?.data?.workspace?.last_workspace_slug ||
       this.user.userSettings?.data?.workspace?.fallback_workspace_slug;
 
     // validate the current workspace_slug is available in the user's workspace list
-    const isCurrentWorkspaceValid = Object.values(this.workspaces || {}).findIndex(
-      (workspace) => workspace.slug === currentWorkspaceSlug
-    );
-
-    if (isCurrentWorkspaceValid >= 0) redirectionRoute = `/${currentWorkspaceSlug}`;
-    return redirectionRoute;
+    return getWorkspaceHomeUrl(this.workspaces || {}, currentWorkspaceSlug, this.user.data?.is_instance_admin);
   };
 
   /**

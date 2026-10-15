@@ -131,6 +131,7 @@ export abstract class BaseUserPermissionStore implements IBaseUserPermissionStor
     const projectRole = this.workspaceProjectsPermissions?.[workspaceSlug]?.[projectId];
     const workspaceRole = this.getWorkspaceRoleByWorkspaceSlug(workspaceSlug);
     if (workspaceRole === EUserWorkspaceRoles.ADMIN) return EUserPermissions.ADMIN;
+    if (workspaceRole === EUserWorkspaceRoles.CLIENT) return projectRole ? EUserPermissions.CLIENT : undefined;
     else return projectRole || undefined;
   });
 

@@ -1448,7 +1448,7 @@ class IssueCommentListCreateAPIEndpoint(BaseAPIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        serializer = IssueCommentCreateSerializer(data=request.data)
+        serializer = IssueCommentCreateSerializer(data=request.data, context={"issue_id": issue_id})
         if serializer.is_valid():
             serializer.save(project_id=project_id, issue_id=issue_id, actor=request.user)
             issue_comment = IssueComment.objects.get(pk=serializer.instance.id)

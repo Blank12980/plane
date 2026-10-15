@@ -3,6 +3,11 @@
 # See the LICENSE file for details.
 
 from django.urls import path
+from plane.app.views.workspace.client_access import (
+    ClientAccessEndpoint,
+    ClientResourcesEndpoint,
+    ClientResourceAssetEndpoint,
+)
 
 
 from plane.app.views import (
@@ -41,6 +46,25 @@ from plane.app.views import (
 
 
 urlpatterns = [
+    path(
+        "workspaces/<str:slug>/client-resources/<uuid:grant_id>/files/<uuid:asset_id>/",
+        ClientResourceAssetEndpoint.as_view(),
+        name="client-resource-file",
+    ),
+    path(
+        "workspaces/<str:slug>/clients/<uuid:client_id>/access/", ClientAccessEndpoint.as_view(), name="client-access"
+    ),
+    path(
+        "workspaces/<str:slug>/clients/<uuid:client_id>/access/<uuid:grant_id>/",
+        ClientAccessEndpoint.as_view(),
+        name="client-access-detail",
+    ),
+    path("workspaces/<str:slug>/client-resources/", ClientResourcesEndpoint.as_view(), name="client-resources"),
+    path(
+        "workspaces/<str:slug>/client-resources/<uuid:grant_id>/",
+        ClientResourcesEndpoint.as_view(),
+        name="client-resource",
+    ),
     path(
         "workspace-slug-check/",
         WorkSpaceAvailabilityCheckEndpoint.as_view(),

@@ -255,6 +255,8 @@ class WorkspaceUserProfileIssuesEndpoint(BaseAPIView):
 
 
 class WorkspaceUserPropertiesEndpoint(BaseAPIView):
+    client_workspace_read = True
+    client_self_service_methods = ("PATCH",)
     permission_classes = [WorkspaceViewerPermission]
 
     def patch(self, request, slug):

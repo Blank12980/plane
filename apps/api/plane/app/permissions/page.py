@@ -99,7 +99,7 @@ class ProjectPagePermission(BasePermission):
 
         # Safe methods (GET, HEAD, OPTIONS) allowed for all active roles
         if method in SAFE_METHODS:
-            if role in [ADMIN, MEMBER, GUEST]:
+            if role in [ADMIN, MEMBER, GUEST, ROLE.CLIENT.value]:
                 return True
             return False
 

@@ -11,6 +11,7 @@ import { logger } from "@plane/logger";
 import { AppError } from "@/lib/errors";
 // services
 import { UserService } from "@/services/user.service";
+import { getPageService } from "@/services/page/handler";
 // types
 import type { HocusPocusServerContext, TDocumentTypes } from "@/types";
 
@@ -26,11 +27,15 @@ export const onAuthenticate = async ({
   requestParameters,
   context,
   token,
+  documentName,
+  connection,
 }: {
   requestHeaders: IncomingHttpHeaders;
   context: HocusPocusServerContext;
   requestParameters: URLSearchParams;
   token: string;
+  documentName: string;
+  connection: { readOnly: boolean };
 }) => {
   let cookie: string | undefined = undefined;
   let userId: string | undefined = undefined;
@@ -66,10 +71,15 @@ export const onAuthenticate = async ({
   context.userId = userId;
   context.workspaceSlug = requestParameters.get("workspaceSlug");
 
-  return await handleAuthentication({
+  const authenticated = await handleAuthentication({
     cookie: context.cookie,
     userId: context.userId,
   });
+  // Check each connection, including when another user already loaded the
+  // document into memory. Client resource grants never authorize collaboration.
+  const access = await getPageService(context.documentType, context).fetchCollaborationAccess(documentName);
+  connection.readOnly = access.read_only;
+  return authenticated;
 };
 
 export const handleAuthentication = async ({ cookie, userId }: { cookie: string; userId: string }) => {

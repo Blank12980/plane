@@ -72,6 +72,7 @@ export const SendProjectInvitationModal = observer(function SendProjectInvitatio
   // derived values
   const currentProjectRole = getProjectRoleByWorkspaceSlugAndProjectId(workspaceSlug, projectId);
   const uninvitedPeople = workspaceMemberIds?.filter((userId) => {
+    if (getWorkspaceMemberDetails(userId)?.role === EUserPermissions.CLIENT) return false;
     const projectMemberDetails = getProjectMemberDetails(userId, projectId);
     const isInvited = projectMemberDetails?.member.id && projectMemberDetails?.original_role;
     return !isInvited;
@@ -162,12 +163,16 @@ export const SendProjectInvitationModal = observer(function SendProjectInvitatio
     const currentMemberWorkspaceRole = getWorkspaceMemberDetails(value)?.role;
     if (!value || !currentMemberWorkspaceRole) return ROLE;
 
-    const isGuestOROwner = [EUserPermissions.ADMIN, EUserPermissions.GUEST].includes(
+    const isGuestOROwner = [EUserPermissions.ADMIN, EUserPermissions.GUEST, EUserPermissions.CLIENT].includes(
       currentMemberWorkspaceRole as EUserPermissions
     );
 
     return Object.fromEntries(
-      Object.entries(ROLE).filter(([key]) => !isGuestOROwner || [currentMemberWorkspaceRole].includes(parseInt(key)))
+      Object.entries(ROLE).filter(([key]) =>
+        isGuestOROwner
+          ? [currentMemberWorkspaceRole].includes(parseInt(key))
+          : parseInt(key) !== EUserPermissions.CLIENT
+      )
     );
   };
 
@@ -216,11 +221,7 @@ export const SendProjectInvitationModal = observer(function SendProjectInvitatio
                             // Update the role to the workspace role when member ID changes
                             const workspaceMemberDetails = getWorkspaceMemberDetails(val);
                             const workspaceRole = workspaceMemberDetails?.role ?? 5;
-                            const newValue = ROLE[workspaceRole].toUpperCase();
-                            setValue(
-                              `members.${index}.role`,
-                              EUserPermissions[newValue as keyof typeof EUserPermissions]
-                            );
+                            setValue(`members.${index}.role`, workspaceRole as EUserPermissions);
                           }}
                           options={options}
                           optionsClassName="w-48"

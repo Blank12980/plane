@@ -23,6 +23,7 @@ from plane.db.models import (
     IssueActivity,
     UserNotificationPreference,
     ProjectMember,
+    WorkspaceMember,
 )
 from django.db.models import Subquery
 
@@ -227,10 +228,19 @@ def notifications(
             2. From the latest set of mentions, extract the users which are not a subscribers & make them subscribers
             """
 
-            # get the list of active project members
-            project_members = ProjectMember.objects.filter(project_id=project_id, is_active=True).values_list(
-                "member_id", flat=True
-            )
+            project = Project.objects.get(pk=project_id)
+            workspace_members = WorkspaceMember.objects.filter(
+                workspace_id=project.workspace_id,
+                is_active=True,
+                role__gte=5,
+                member__is_active=True,
+            ).values("member_id")
+            # Stale project memberships must not send private comments to clients or departed users.
+            project_members = ProjectMember.objects.filter(
+                project_id=project_id,
+                is_active=True,
+                member_id__in=workspace_members,
+            ).values_list("member_id", flat=True)
 
             # Get new mentions from the newer instance
             new_mentions = get_new_mentions(requested_instance=requested_data, current_instance=current_instance)
@@ -287,6 +297,25 @@ def notifications(
                 .values_list("subscriber", flat=True)
             )
 
+            # A reply also reaches the parent author, even if they are no longer subscribed.
+            if type == "comment.activity.created":
+                comment_data = json.loads(requested_data) if isinstance(requested_data, str) else requested_data
+                parent_id = (comment_data or {}).get("parent")
+                parent_actor = (
+                    IssueComment.objects.filter(
+                        pk=parent_id,
+                        issue_id=issue_id,
+                        project_id=project_id,
+                        actor_id__in=project_members,
+                    )
+                    .values_list("actor_id", flat=True)
+                    .first()
+                    if parent_id
+                    else None
+                )
+                if parent_actor and str(parent_actor) not in new_mentions + comment_mentions + [str(actor_id)]:
+                    issue_subscribers = list(set(issue_subscribers) | {parent_actor})
+
             issue = Issue.objects.filter(pk=issue_id).first()
 
             if subscriber:
@@ -297,8 +326,6 @@ def notifications(
                     )
                 except Exception:
                     pass
-
-            project = Project.objects.get(pk=project_id)
 
             issue_assignees = IssueAssignee.objects.filter(
                 issue_id=issue_id,
@@ -316,7 +343,7 @@ def notifications(
                 else:
                     sender = "in_app:issue_activities:subscribed"
 
-                preference = UserNotificationPreference.objects.get(user_id=subscriber)
+                preference, _ = UserNotificationPreference.objects.get_or_create(user_id=subscriber)
 
                 for issue_activity in issue_activities_created:
                     # If activity done in blocking then blocked by email should not go

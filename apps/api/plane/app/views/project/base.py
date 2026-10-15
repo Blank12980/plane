@@ -393,6 +393,8 @@ class ProjectIdentifierEndpoint(BaseAPIView):
 
 
 class ProjectUserViewsEndpoint(BaseAPIView):
+    client_self_service_methods = ("POST",)
+
     def post(self, request, slug, project_id):
         project = Project.objects.get(pk=project_id, workspace__slug=slug)
 

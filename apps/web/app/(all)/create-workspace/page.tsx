@@ -103,6 +103,9 @@ const CreateWorkspacePage = observer(function CreateWorkspacePage() {
                   defaultValues={defaultValues}
                   setDefaultValues={setDefaultValues}
                 />
+                <Link href="/invitations" className="mt-4 inline-block text-13 text-secondary">
+                  Продолжить без создания пространства
+                </Link>
               </div>
             </div>
           )}

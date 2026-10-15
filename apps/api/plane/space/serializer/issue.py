@@ -7,6 +7,7 @@ from django.utils import timezone
 
 # Third Party imports
 from rest_framework import serializers
+from plane.utils.comment_threads import CommentThreadValidationMixin
 
 # Module imports
 from .base import BaseSerializer
@@ -216,7 +217,8 @@ class CommentReactionLiteSerializer(BaseSerializer):
         fields = ["id", "reaction", "comment", "actor_detail"]
 
 
-class IssueCommentSerializer(BaseSerializer):
+class IssueCommentSerializer(CommentThreadValidationMixin, BaseSerializer):
+    comment_access = "EXTERNAL"
     actor_detail = UserLiteSerializer(read_only=True, source="actor")
     issue_detail = IssueFlatSerializer(read_only=True, source="issue")
     project_detail = ProjectLiteSerializer(read_only=True, source="project")
@@ -231,6 +233,7 @@ class IssueCommentSerializer(BaseSerializer):
             "workspace",
             "project",
             "issue",
+            "actor",
             "created_by",
             "updated_by",
             "created_at",

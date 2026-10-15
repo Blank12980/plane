@@ -56,6 +56,7 @@ from plane.utils.project_access import projects_for_user
 
 
 class WorkSpaceViewSet(BaseViewSet):
+    client_workspace_read = True
     model = Workspace
     serializer_class = WorkSpaceSerializer
     permission_classes = [WorkSpaceBasePermission]
@@ -210,6 +211,7 @@ class WorkSpaceViewSet(BaseViewSet):
 
 
 class UserWorkSpacesEndpoint(BaseAPIView):
+    client_workspace_read = True
     search_fields = ["name"]
     filterset_fields = ["owner"]
     use_read_replica = True

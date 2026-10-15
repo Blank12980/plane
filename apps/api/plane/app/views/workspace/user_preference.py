@@ -16,6 +16,8 @@ from rest_framework import status
 
 
 class WorkspaceUserPreferenceViewSet(BaseAPIView):
+    client_workspace_read = True
+    client_self_service_methods = ("PATCH",)
     model = WorkspaceUserPreference
     use_read_replica = True
 
@@ -78,14 +80,16 @@ class WorkspaceUserPreferenceViewSet(BaseAPIView):
             status=status.HTTP_200_OK,
         )
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST, ROLE.CLIENT], level="WORKSPACE")
     def patch(self, request, slug):
         for data in request.data:
             key = data.pop("key", None)
             if not key:
                 continue
 
-            preference = WorkspaceUserPreference.objects.filter(key=key, workspace__slug=slug).first()
+            preference = WorkspaceUserPreference.objects.filter(
+                key=key, workspace__slug=slug, user=request.user
+            ).first()
 
             if not preference:
                 continue

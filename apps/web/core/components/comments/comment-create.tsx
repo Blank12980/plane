@@ -9,6 +9,7 @@ import { observer } from "mobx-react";
 import { useForm, Controller } from "react-hook-form";
 // gizmo imports
 import { EIssueCommentAccessSpecifier } from "@plane/constants";
+import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { EditorRefApi } from "@plane/editor";
 import type { TIssueComment, TCommentsOperations } from "@plane/types";
 import { cn, isCommentEmpty } from "@plane/utils";
@@ -28,6 +29,9 @@ type TCommentCreate = {
   showToolbarInitially?: boolean;
   projectId?: string;
   onSubmitCallback?: (elementId: string) => void;
+  parentCommentId?: string;
+  replyToCommentId?: string;
+  access?: TIssueComment["access"];
 };
 
 // services
@@ -41,11 +45,15 @@ export const CommentCreate = observer(function CommentCreate(props: TCommentCrea
     showToolbarInitially = false,
     projectId,
     onSubmitCallback,
+    parentCommentId,
+    replyToCommentId,
+    access,
   } = props;
   // states
   const [uploadedAssetIds, setUploadedAssetIds] = useState<string[]>([]);
   // refs
   const editorRef = useRef<EditorRefApi>(null);
+  const pendingCommentRef = useRef<Partial<TIssueComment> | null>(null);
   // comment attachments
   const { pendingAttachments, uploadStatus, isUploading, uploadFiles, removeAttachment, clearPendingAttachments } =
     useCommentAttachments({ activityOperations });
@@ -63,6 +71,7 @@ export const CommentCreate = observer(function CommentCreate(props: TCommentCrea
   } = useForm<Partial<TIssueComment>>({
     defaultValues: {
       comment_html: "<p></p>",
+      access,
     },
   });
 
@@ -70,13 +79,17 @@ export const CommentCreate = observer(function CommentCreate(props: TCommentCrea
     // wait for every attachment to finish uploading before the comment is created
     if (isUploading) return;
     try {
-      const comment = await activityOperations.createComment(formData);
-      if (comment?.id) {
-        // the assets were uploaded before the comment existed, bind them to it now
-        await activityOperations.bindCommentAttachments(comment.id, pendingAttachments);
-        clearPendingAttachments();
-        onSubmitCallback?.(comment.id);
-      }
+      const payload: Partial<TIssueComment> = {
+        ...formData,
+        ...(parentCommentId ? { parent: parentCommentId, access } : {}),
+      };
+      const comment = pendingCommentRef.current ?? (await activityOperations.createComment(payload));
+      if (!comment?.id) throw new Error("Comment was not created");
+      if (pendingCommentRef.current) await activityOperations.updateComment(comment.id, payload);
+      pendingCommentRef.current = comment;
+      // Retrying a failed attachment upload must reuse the comment that already exists.
+      await activityOperations.bindCommentAttachments(comment.id, pendingAttachments);
+      clearPendingAttachments();
       if (uploadedAssetIds.length > 0) {
         if (projectId) {
           await fileService.updateBulkProjectAssetsUploadStatus(workspaceSlug, projectId.toString(), entityId, {
@@ -89,13 +102,20 @@ export const CommentCreate = observer(function CommentCreate(props: TCommentCrea
         }
         setUploadedAssetIds([]);
       }
-    } catch (error) {
-      console.error(error);
-    } finally {
       reset({
         comment_html: "<p></p>",
+        access,
       });
       editorRef.current?.clearEditor();
+      pendingCommentRef.current = null;
+      onSubmitCallback?.(comment.id);
+    } catch (error) {
+      console.error(error);
+      setToast({
+        type: TOAST_TYPE.ERROR,
+        title: "Не удалось отправить комментарий",
+        message: "Текст сохранён. Попробуйте ещё раз.",
+      });
     }
   };
 
@@ -131,7 +151,7 @@ export const CommentCreate = observer(function CommentCreate(props: TCommentCrea
               <LiteTextEditor
                 editable
                 workspaceId={workspaceId}
-                id={"add_comment_" + entityId}
+                id={"add_comment_" + entityId + (replyToCommentId ? `_${replyToCommentId}` : "")}
                 value={"<p></p>"}
                 workspaceSlug={workspaceSlug}
                 projectId={projectId}
@@ -144,8 +164,8 @@ export const CommentCreate = observer(function CommentCreate(props: TCommentCrea
                 initialValue={value ?? "<p></p>"}
                 containerClassName="min-h-min"
                 onChange={(comment_json, comment_html) => onChange(comment_html)}
-                accessSpecifier={accessValue ?? EIssueCommentAccessSpecifier.INTERNAL}
-                handleAccessChange={onAccessChange}
+                accessSpecifier={accessValue ?? access ?? EIssueCommentAccessSpecifier.INTERNAL}
+                handleAccessChange={parentCommentId ? undefined : onAccessChange}
                 isSubmitting={isSubmitting}
                 uploadFile={async (blockId, file) => {
                   const { asset_id } = await activityOperations.uploadCommentAsset(blockId, file);

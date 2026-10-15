@@ -14,6 +14,7 @@ export enum EUserProjectRoles {
   ADMIN = 20,
   MEMBER = 15,
   GUEST = 5,
+  CLIENT = 3,
 }
 
 export interface IPartialProject {

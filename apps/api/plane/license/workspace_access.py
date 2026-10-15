@@ -4,7 +4,7 @@
 
 from django.db import transaction
 
-from plane.db.models import Project, ProjectMember, Workspace, WorkspaceMember
+from plane.db.models import ClientAccessGrant, Project, ProjectMember, Workspace, WorkspaceMember
 from plane.license.models import InstanceAdmin, INSTANCE_ADMIN_ROLE
 
 
@@ -127,6 +127,17 @@ def promote_explicit_workspace_membership(user, workspace, role=None, include_pr
         member=user,
         deleted_at__isnull=True,
     ).first()
+    if workspace_member is not None and (
+        (role is not None and role != workspace_member.role and 3 in (role, workspace_member.role))
+        or (workspace_member.role == 3 and not workspace_member.is_active)
+    ):
+        ClientAccessGrant.objects.filter(workspace=workspace, client=user).delete()
+    if role == 3 and workspace_member is not None and workspace_member.role != 3:
+        ProjectMember.objects.filter(
+            workspace=workspace,
+            member=user,
+            is_instance_admin_access=False,
+        ).update(is_active=False, role=3)
     if workspace_member is None:
         workspace_member = WorkspaceMember.objects.create(
             workspace=workspace,
@@ -157,6 +168,8 @@ def promote_explicit_workspace_membership(user, workspace, role=None, include_pr
 @transaction.atomic
 def promote_explicit_project_membership(user, project, role=None):
     """Make a hidden project projection visible when the user is added to it."""
+    if WorkspaceMember.objects.filter(workspace=project.workspace, member=user, role=3, is_active=True).exists():
+        role = 3
 
     workspace_member = WorkspaceMember.objects.filter(
         workspace=project.workspace,

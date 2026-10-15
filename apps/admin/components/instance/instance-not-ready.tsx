@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { Button } from "@plane/propel/button";
 // assets
-import PlaneTakeOffImage from "@/app/assets/images/plane-takeoff.png?url";
+import { PlaneLockup } from "@plane/propel/icons";
 
 export function InstanceNotReady() {
   return (
@@ -15,8 +15,10 @@ export function InstanceNotReady() {
       <div className="relative w-auto max-w-2xl space-y-8 py-10">
         <div className="relative flex flex-col items-center justify-center space-y-4">
           <h1 className="pb-3 text-24 font-bold">Добро пожаловать в Gizmo!</h1>
-          <img src={PlaneTakeOffImage} alt="Gizmo Logo" />
-          <p className="text-14 font-medium text-placeholder">Начните с настройки вашего экземпляра и рабочего пространства</p>
+          <PlaneLockup className="h-auto w-48 text-primary" />
+          <p className="text-14 font-medium text-placeholder">
+            Начните с настройки вашего экземпляра и рабочего пространства
+          </p>
         </div>
 
         <div>

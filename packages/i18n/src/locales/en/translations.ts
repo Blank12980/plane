@@ -2532,6 +2532,10 @@ export default {
     },
   },
   role_details: {
+    client: {
+      title: "Client",
+      description: "Read-only access to work items and pages explicitly shared by an administrator.",
+    },
     guest: {
       title: "Guest",
       description: "External members of organizations can be invited as guests.",

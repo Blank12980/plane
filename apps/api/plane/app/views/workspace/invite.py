@@ -15,6 +15,7 @@ from django.utils import timezone
 
 # Third party modules
 from rest_framework import status
+from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
@@ -32,6 +33,8 @@ from plane.license.workspace_access import promote_explicit_workspace_membership
 from plane.utils.cache import invalidate_cache, invalidate_cache_directly
 from plane.utils.host import base_host
 from plane.utils.analytics_events import USER_JOINED_WORKSPACE, USER_INVITED_TO_WORKSPACE
+from plane.db.models.workspace import ROLE_CHOICES
+from plane.utils.project_access import is_workspace_admin
 from .. import BaseViewSet
 
 
@@ -59,6 +62,12 @@ class WorkspaceInvitationsViewset(BaseViewSet):
 
         # check for role level of the requesting user
         requesting_user = WorkspaceMember.objects.get(workspace__slug=slug, member=request.user, is_active=True)
+        for email in emails:
+            email["role"] = serializers.ChoiceField(choices=ROLE_CHOICES).run_validation(email.get("role", 5))
+        if any(email["role"] == 3 for email in emails) and not is_workspace_admin(request.user, slug):
+            return Response(
+                {"error": "Only administrators can assign the Client role"}, status=status.HTTP_403_FORBIDDEN
+            )
 
         # Check if any invited user has an higher role
         if len([email for email in emails if int(email.get("role", 5)) > requesting_user.role]):
@@ -158,6 +167,16 @@ class WorkspaceInvitationsViewset(BaseViewSet):
             )
 
         return Response({"message": "Emails sent successfully"}, status=status.HTTP_200_OK)
+
+    def partial_update(self, request, *args, **kwargs):
+        invitation = self.get_object()
+        if (invitation.role == 3 or str(request.data.get("role")) == "3") and not is_workspace_admin(
+            request.user, kwargs["slug"]
+        ):
+            return Response(
+                {"error": "Only administrators can manage Client invitations"}, status=status.HTTP_403_FORBIDDEN
+            )
+        return super().partial_update(request, *args, **kwargs)
 
     def destroy(self, request, slug, pk):
         workspace_member_invite = WorkspaceMemberInvite.objects.get(pk=pk, workspace__slug=slug)
@@ -287,8 +306,8 @@ class UserWorkspaceInvitationsViewSet(BaseViewSet):
                 multiple=True,
             )
             # Update the WorkspaceMember for this specific invitation
-            WorkspaceMember.objects.filter(workspace_id=invitation.workspace_id, member=request.user).update(
-                is_active=True, role=invitation.role
+            promote_explicit_workspace_membership(
+                request.user, invitation.workspace, role=invitation.role, include_projects=False
             )
 
             # Track event
@@ -304,20 +323,6 @@ class UserWorkspaceInvitationsViewSet(BaseViewSet):
                     "joined_at": str(timezone.now()),
                 },
             )
-
-        # Bulk create the user for all the workspaces
-        WorkspaceMember.objects.bulk_create(
-            [
-                WorkspaceMember(
-                    workspace=invitation.workspace,
-                    member=request.user,
-                    role=invitation.role,
-                    created_by=request.user,
-                )
-                for invitation in workspace_invitations
-            ],
-            ignore_conflicts=True,
-        )
 
         # Delete joined workspace invites
         workspace_invitations.delete()

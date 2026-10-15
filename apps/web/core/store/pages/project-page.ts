@@ -105,6 +105,7 @@ export class ProjectPage extends BasePage implements TProjectPage {
    */
   get canCurrentUserEditPage() {
     const highestRole = this.getHighestRoleAcrossProjects();
+    if (highestRole === EUserPermissions.CLIENT) return false;
     const isPagePublic = this.access === EPageAccess.PUBLIC;
     return (
       (isPagePublic && !!highestRole && highestRole >= EUserPermissions.MEMBER) ||
@@ -125,6 +126,7 @@ export class ProjectPage extends BasePage implements TProjectPage {
    */
   get canCurrentUserLockPage() {
     const highestRole = this.getHighestRoleAcrossProjects();
+    if (highestRole === EUserPermissions.CLIENT) return false;
     return this.isCurrentUserOwner || highestRole === EUserPermissions.ADMIN;
   }
 
@@ -133,6 +135,7 @@ export class ProjectPage extends BasePage implements TProjectPage {
    */
   get canCurrentUserChangeAccess() {
     const highestRole = this.getHighestRoleAcrossProjects();
+    if (highestRole === EUserPermissions.CLIENT) return false;
     return this.isCurrentUserOwner || highestRole === EUserPermissions.ADMIN;
   }
 
@@ -141,6 +144,7 @@ export class ProjectPage extends BasePage implements TProjectPage {
    */
   get canCurrentUserArchivePage() {
     const highestRole = this.getHighestRoleAcrossProjects();
+    if (highestRole === EUserPermissions.CLIENT) return false;
     return this.isCurrentUserOwner || highestRole === EUserPermissions.ADMIN;
   }
 
@@ -149,6 +153,7 @@ export class ProjectPage extends BasePage implements TProjectPage {
    */
   get canCurrentUserDeletePage() {
     const highestRole = this.getHighestRoleAcrossProjects();
+    if (highestRole === EUserPermissions.CLIENT) return false;
     return this.isCurrentUserOwner || highestRole === EUserPermissions.ADMIN;
   }
 
@@ -165,6 +170,7 @@ export class ProjectPage extends BasePage implements TProjectPage {
    */
   get canCurrentUserMovePage() {
     const highestRole = this.getHighestRoleAcrossProjects();
+    if (highestRole === EUserPermissions.CLIENT) return false;
     return this.isCurrentUserOwner || highestRole === EUserPermissions.ADMIN;
   }
 
@@ -173,6 +179,7 @@ export class ProjectPage extends BasePage implements TProjectPage {
    */
   get isContentEditable() {
     const highestRole = this.getHighestRoleAcrossProjects();
+    if (highestRole === EUserPermissions.CLIENT) return false;
     const isOwner = this.isCurrentUserOwner;
     const isPublic = this.access === EPageAccess.PUBLIC;
     const isArchived = this.archived_at;

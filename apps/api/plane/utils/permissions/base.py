@@ -8,13 +8,14 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from enum import Enum
-from plane.utils.project_access import is_workspace_admin, require_project_access
+from plane.utils.project_access import is_workspace_admin, is_workspace_client, require_project_access
 
 
 class ROLE(Enum):
     ADMIN = 20
     MEMBER = 15
     GUEST = 5
+    CLIENT = 3
 
 
 def allow_permission(allowed_roles, level="PROJECT", creator=False, model=None):
@@ -35,6 +36,10 @@ def allow_permission(allowed_roles, level="PROJECT", creator=False, model=None):
 
             # Convert allowed_roles to their values if they are enum members
             allowed_role_values = [role.value if isinstance(role, ROLE) else role for role in allowed_roles]
+            if request.method in ("GET", "HEAD", "OPTIONS") and ROLE.GUEST.value in allowed_role_values:
+                allowed_role_values.append(ROLE.CLIENT.value)
+            if is_workspace_client(request.user, slug) and ROLE.CLIENT.value not in allowed_role_values:
+                return Response({"error": "Clients have read-only access."}, status=status.HTTP_403_FORBIDDEN)
 
             # Check role permissions
             if level == "WORKSPACE":

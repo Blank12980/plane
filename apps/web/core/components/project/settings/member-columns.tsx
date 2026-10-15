@@ -126,9 +126,7 @@ export const AccountTypeColumn = observer(function AccountTypeColumn(props: Acco
     : false;
   const currentProjectRole = getProjectRoleByWorkspaceSlugAndProjectId(workspaceSlug, projectId);
 
-  const isCurrentUserProjectAdmin = currentProjectRole
-    ? ![EUserPermissions.MEMBER, EUserPermissions.GUEST].includes(Number(currentProjectRole) ?? EUserPermissions.GUEST)
-    : false;
+  const isCurrentUserProjectAdmin = currentProjectRole === EUserPermissions.ADMIN;
 
   // logic
   // Workspace admin can change his own role
@@ -140,10 +138,12 @@ export const AccountTypeColumn = observer(function AccountTypeColumn(props: Acco
     const currentMemberWorkspaceRole = getWorkspaceMemberDetails(value)?.role as EUserPermissions | undefined;
     if (!value || !currentMemberWorkspaceRole) return ROLE;
 
-    const isGuest = [EUserPermissions.GUEST].includes(currentMemberWorkspaceRole);
+    const isRestricted = [EUserPermissions.GUEST, EUserPermissions.CLIENT].includes(currentMemberWorkspaceRole);
 
     return Object.fromEntries(
-      Object.entries(ROLE).filter(([key]) => !isGuest || parseInt(key) === EUserPermissions.GUEST)
+      Object.entries(ROLE).filter(([key]) =>
+        isRestricted ? parseInt(key) === currentMemberWorkspaceRole : parseInt(key) !== EUserPermissions.CLIENT
+      )
     );
   };
 

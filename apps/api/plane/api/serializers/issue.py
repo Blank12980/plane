@@ -9,6 +9,7 @@ from django.db import IntegrityError
 
 #  Third party imports
 from rest_framework import serializers
+from plane.utils.comment_threads import CommentThreadValidationMixin
 
 # Module imports
 from plane.db.models import (
@@ -502,7 +503,7 @@ class IssueAttachmentSerializer(BaseSerializer):
         ]
 
 
-class IssueCommentCreateSerializer(BaseSerializer):
+class IssueCommentCreateSerializer(CommentThreadValidationMixin, BaseSerializer):
     """
     Serializer for creating work item comments.
 
@@ -515,6 +516,7 @@ class IssueCommentCreateSerializer(BaseSerializer):
         fields = [
             "comment_json",
             "comment_html",
+            "parent",
             "access",
             "external_source",
             "external_id",

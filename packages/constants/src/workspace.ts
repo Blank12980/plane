@@ -78,12 +78,17 @@ export const RESTRICTED_URLS: string[] = [
 ];
 
 export const ROLE = {
+  [EUserWorkspaceRoles.CLIENT]: "Клиент",
   [EUserWorkspaceRoles.GUEST]: "Guest",
   [EUserWorkspaceRoles.MEMBER]: "Member",
   [EUserWorkspaceRoles.ADMIN]: "Admin",
 };
 
 export const ROLE_DETAILS = {
+  [EUserWorkspaceRoles.CLIENT]: {
+    i18n_title: "role_details.client.title",
+    i18n_description: "role_details.client.description",
+  },
   [EUserWorkspaceRoles.GUEST]: {
     i18n_title: "role_details.guest.title",
     i18n_description: "role_details.guest.description",
@@ -268,7 +273,12 @@ export const WORKSPACE_SIDEBAR_STATIC_NAVIGATION_ITEMS: Record<string, IWorkspac
     key: "projects",
     labelTranslationKey: "projects",
     href: `/projects/`,
-    access: [EUserWorkspaceRoles.ADMIN, EUserWorkspaceRoles.MEMBER, EUserWorkspaceRoles.GUEST],
+    access: [
+      EUserWorkspaceRoles.ADMIN,
+      EUserWorkspaceRoles.MEMBER,
+      EUserWorkspaceRoles.GUEST,
+      EUserWorkspaceRoles.CLIENT,
+    ],
     highlight: (pathname: string, url: string) => pathname === url,
   },
 };

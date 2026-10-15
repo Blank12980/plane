@@ -3,6 +3,7 @@
 # See the LICENSE file for details.
 
 from django.urls import path
+from plane.app.views.module.time_budget import ModuleTimeBudgetEndpoint
 
 
 from plane.app.views import (
@@ -16,6 +17,11 @@ from plane.app.views import (
 
 
 urlpatterns = [
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/modules/<uuid:module_id>/time-budget/",
+        ModuleTimeBudgetEndpoint.as_view(),
+        name="module-time-budget",
+    ),
     path(
         "workspaces/<str:slug>/projects/<uuid:project_id>/modules/",
         ModuleViewSet.as_view({"get": "list", "post": "create"}),
