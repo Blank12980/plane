@@ -48,6 +48,7 @@ from plane.db.models import (
     IssueSubscriber,
     Project,
     ProjectMember,
+    Profile,
     User,
     Workspace,
     WorkspaceMember,
@@ -70,9 +71,8 @@ from plane.utils.project_access import projects_for_user
 
 class UserLastProjectWithWorkspaceEndpoint(BaseAPIView):
     def get(self, request):
-        user = User.objects.get(pk=request.user.id)
-
-        last_workspace_id = user.last_workspace_id
+        profile = Profile.objects.filter(user=request.user).first()
+        last_workspace_id = profile.last_workspace_id if profile is not None else None
 
         if last_workspace_id is None:
             return Response(
@@ -84,7 +84,10 @@ class UserLastProjectWithWorkspaceEndpoint(BaseAPIView):
         workspace_serializer = WorkSpaceSerializer(workspace)
 
         project_member = ProjectMember.objects.filter(
-            workspace_id=last_workspace_id, member=request.user
+            workspace_id=last_workspace_id,
+            member=request.user,
+            is_active=True,
+            project_id__in=projects_for_user(request.user, workspace.slug).values("pk"),
         ).select_related("workspace", "project", "member", "workspace__owner")
 
         project_member_serializer = ProjectMemberSerializer(project_member, many=True)

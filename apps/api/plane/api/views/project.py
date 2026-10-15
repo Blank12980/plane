@@ -7,7 +7,7 @@ import json
 
 # Django imports
 from django.db import IntegrityError
-from django.db.models import Exists, F, Func, OuterRef, Prefetch, Subquery, Count
+from django.db.models import Exists, F, Func, IntegerField, OuterRef, Prefetch, Subquery, Count
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.core.serializers.json import DjangoJSONEncoder
@@ -40,7 +40,7 @@ from plane.db.models import (
 from plane.bgtasks.webhook_task import model_activity, webhook_activity
 from .base import BaseAPIView
 from plane.utils.host import base_host
-from plane.utils.project_access import projects_for_user, project_list_data
+from plane.utils.project_access import projects_for_user, project_list_data, annotate_project_membership
 from plane.api.serializers import (
     ProjectSerializer,
     ProjectCreateSerializer,
@@ -82,44 +82,31 @@ class ProjectListCreateAPIEndpoint(BaseAPIView):
 
     def get_queryset(self):
         return (
-            projects_for_user(self.request.user, self.kwargs.get("slug"), include_public=True)
-            .select_related("project_lead")
-            .annotate(
-                is_member=Exists(
-                    ProjectMember.objects.filter(
-                        member=self.request.user,
-                        project_id=OuterRef("pk"),
-                        workspace__slug=self.kwargs.get("slug"),
-                        is_active=True,
-                    )
-                )
+            annotate_project_membership(
+                projects_for_user(self.request.user, self.kwargs.get("slug"), include_public=True),
+                self.request.user,
+                self.kwargs.get("slug"),
             )
+            .select_related("project_lead")
             .annotate(
                 total_members=ProjectMember.objects.filter(
                     project_id=OuterRef("id"), member__is_bot=False, is_active=True
                 )
                 .order_by()
-                .annotate(count=Func(F("id"), function="Count"))
+                .annotate(count=Func(F("id"), function="Count", output_field=IntegerField()))
                 .values("count")
             )
             .annotate(
                 total_cycles=Cycle.objects.filter(project_id=OuterRef("id"))
                 .order_by()
-                .annotate(count=Func(F("id"), function="Count"))
+                .annotate(count=Func(F("id"), function="Count", output_field=IntegerField()))
                 .values("count")
             )
             .annotate(
                 total_modules=Module.objects.filter(project_id=OuterRef("id"))
                 .order_by()
-                .annotate(count=Func(F("id"), function="Count"))
+                .annotate(count=Func(F("id"), function="Count", output_field=IntegerField()))
                 .values("count")
-            )
-            .annotate(
-                member_role=ProjectMember.objects.filter(
-                    project_id=OuterRef("pk"),
-                    member_id=self.request.user.id,
-                    is_active=True,
-                ).values("role")
             )
             .annotate(
                 is_deployed=Exists(
@@ -290,44 +277,31 @@ class ProjectDetailAPIEndpoint(BaseAPIView):
 
     def get_queryset(self):
         return (
-            projects_for_user(self.request.user, self.kwargs.get("slug"))
-            .select_related("workspace", "workspace__owner", "default_assignee", "project_lead")
-            .annotate(
-                is_member=Exists(
-                    ProjectMember.objects.filter(
-                        member=self.request.user,
-                        project_id=OuterRef("pk"),
-                        workspace__slug=self.kwargs.get("slug"),
-                        is_active=True,
-                    )
-                )
+            annotate_project_membership(
+                projects_for_user(self.request.user, self.kwargs.get("slug")),
+                self.request.user,
+                self.kwargs.get("slug"),
             )
+            .select_related("workspace", "workspace__owner", "default_assignee", "project_lead")
             .annotate(
                 total_members=ProjectMember.objects.filter(
                     project_id=OuterRef("id"), member__is_bot=False, is_active=True
                 )
                 .order_by()
-                .annotate(count=Func(F("id"), function="Count"))
+                .annotate(count=Func(F("id"), function="Count", output_field=IntegerField()))
                 .values("count")
             )
             .annotate(
                 total_cycles=Cycle.objects.filter(project_id=OuterRef("id"))
                 .order_by()
-                .annotate(count=Func(F("id"), function="Count"))
+                .annotate(count=Func(F("id"), function="Count", output_field=IntegerField()))
                 .values("count")
             )
             .annotate(
                 total_modules=Module.objects.filter(project_id=OuterRef("id"))
                 .order_by()
-                .annotate(count=Func(F("id"), function="Count"))
+                .annotate(count=Func(F("id"), function="Count", output_field=IntegerField()))
                 .values("count")
-            )
-            .annotate(
-                member_role=ProjectMember.objects.filter(
-                    project_id=OuterRef("pk"),
-                    member_id=self.request.user.id,
-                    is_active=True,
-                ).values("role")
             )
             .annotate(
                 is_deployed=Exists(

@@ -115,11 +115,11 @@ def _promote_member_record(member, role=None):
 
 
 @transaction.atomic
-def promote_explicit_workspace_membership(user, workspace, role=None, include_projects=True):
+def promote_explicit_workspace_membership(user, workspace, role=None, include_projects=False):
     """Turn a hidden instance-admin projection into a visible workspace membership.
 
-    Used when an instance admin is invited, officially added, or joins on their
-    own. After this they appear in member pickers and can be assigned.
+    Workspace invitations do not grant project membership or reactivate departed
+    projects. A project invitation must promote its own membership separately.
     """
 
     workspace_member = WorkspaceMember.objects.filter(
@@ -145,6 +145,8 @@ def promote_explicit_workspace_membership(user, workspace, role=None, include_pr
         workspace=workspace,
         member=user,
         deleted_at__isnull=True,
+        is_active=True,
+        is_instance_admin_access=False,
     )
     target_role = workspace_member.role
     for project_member in project_members:
@@ -192,6 +194,7 @@ def revoke_instance_admin_access(user):
         for member in members:
             if member.instance_admin_previous_role is None:
                 member.is_active = False
+                member.role = 5
             else:
                 member.role = member.instance_admin_previous_role
             member.is_instance_admin_access = False

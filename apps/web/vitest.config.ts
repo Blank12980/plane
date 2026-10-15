@@ -4,7 +4,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   esbuild: { jsx: "automatic" },
   resolve: {
-    alias: { "@": path.resolve(import.meta.dirname, "core") },
+    alias: {
+      "@/helpers": path.resolve(import.meta.dirname, "helpers"),
+      "@": path.resolve(import.meta.dirname, "core"),
+    },
     dedupe: ["react", "react-dom", "@headlessui/react"],
   },
   test: {

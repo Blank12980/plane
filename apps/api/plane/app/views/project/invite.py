@@ -244,7 +244,11 @@ class ProjectJoinEndpoint(BaseAPIView):
             promote_explicit_workspace_membership(
                 request.user,
                 project_invite.workspace,
-                role=workspace_member.role if workspace_member else min(project_invite.role, ROLE.MEMBER.value),
+                role=(
+                    workspace_member.role
+                    if workspace_member and workspace_member.is_active and not workspace_member.is_instance_admin_access
+                    else min(project_invite.role, ROLE.MEMBER.value)
+                ),
                 include_projects=False,
             )
             promote_explicit_project_membership(request.user, project_invite.project, role=project_invite.role)

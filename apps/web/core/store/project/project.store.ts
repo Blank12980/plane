@@ -10,6 +10,8 @@ import { computedFn } from "mobx-utils";
 // gizmo imports
 import type { TFetchStatus, TLoader, TProjectAnalyticsCount, TProjectAnalyticsCountParams } from "@plane/types";
 // helpers
+import { EUserPermissions } from "@plane/constants";
+import { isProjectVisible } from "@/helpers/project-access";
 import { orderProjects, shouldFilterProject } from "@plane/utils";
 // services
 import type { TProject, TPartialProject } from "@/plane-web/types/projects";
@@ -58,6 +60,7 @@ export interface IProjectStore {
   fetchPartialProjects: (workspaceSlug: string) => Promise<TPartialProject[]>;
   fetchProjects: (workspaceSlug: string) => Promise<TProject[]>;
   fetchProjectDetails: (workspaceSlug: string, projectId: string) => Promise<TProject>;
+  invalidateProjectRequests: (workspaceSlug: string, projectId: string) => void;
   fetchProjectAnalyticsCount: (
     workspaceSlug: string,
     params?: TProjectAnalyticsCountParams
@@ -82,6 +85,8 @@ export class ProjectStore implements IProjectStore {
   loader: TLoader = "init-loader";
   fetchStatus: TFetchStatus = undefined;
   projectMap: Record<string, TProject> = {};
+  private workspaceFetchVersions: Record<string, number> = {};
+  private projectFetchVersions: Record<string, number> = {};
   projectAnalyticsCountMap: Record<string, TProjectAnalyticsCount> = {};
   openCollapsibleSection: ProjectOverviewCollapsible[] = ["milestones"];
   lastCollapsibleAction: ProjectOverviewCollapsible | null = null;
@@ -152,6 +157,17 @@ export class ProjectStore implements IProjectStore {
     return this.loader === "init-loader";
   }
 
+  private isVisibleProject = (project: TProject): boolean => {
+    const workspaceSlug = this.rootStore.workspaceRoot.currentWorkspace?.slug;
+    if (!workspaceSlug) return false;
+    const permission = this.rootStore.user.permission;
+    const isAdmin =
+      !!this.rootStore.user.data?.is_instance_admin ||
+      permission.getWorkspaceRoleByWorkspaceSlug(workspaceSlug) === EUserPermissions.ADMIN;
+    const hasMembership = permission.workspaceProjectsPermissions[workspaceSlug]?.[project.id] != null;
+    return isProjectVisible(project, isAdmin, hasMembership);
+  };
+
   /**
    * @description returns filtered projects based on filters and search query
    */
@@ -166,6 +182,7 @@ export class ProjectStore implements IProjectStore {
     let workspaceProjects = Object.values(this.projectMap).filter(
       (p) =>
         p.workspace === workspaceDetails.id &&
+        this.isVisibleProject(p) &&
         (p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           p.identifier.toLowerCase().includes(searchQuery.toLowerCase())) &&
         shouldFilterProject(p, displayFilters, filters)
@@ -181,7 +198,7 @@ export class ProjectStore implements IProjectStore {
     const workspaceDetails = this.rootStore.workspaceRoot.currentWorkspace;
     if (!workspaceDetails) return;
     const workspaceProjects = Object.values(this.projectMap).filter(
-      (p) => p.workspace === workspaceDetails.id && !p.archived_at
+      (p) => p.workspace === workspaceDetails.id && this.isVisibleProject(p) && !p.archived_at
     );
     const projectIds = workspaceProjects.map((p) => p.id);
     return projectIds ?? null;
@@ -198,7 +215,10 @@ export class ProjectStore implements IProjectStore {
     projects = sortBy(projects, "archived_at");
 
     const projectIds = projects
-      .filter((project) => project.workspace === currentWorkspace.id && !!project.archived_at)
+      .filter(
+        (project) =>
+          project.workspace === currentWorkspace.id && this.isVisibleProject(project) && !!project.archived_at
+      )
       .map((project) => project.id);
     return projectIds;
   }
@@ -244,7 +264,13 @@ export class ProjectStore implements IProjectStore {
     projects = sortBy(projects, "sort_order");
 
     const projectIds = projects
-      .filter((project) => project.workspace === currentWorkspace.id && !!project.member_role && !project.archived_at)
+      .filter(
+        (project) =>
+          project.workspace === currentWorkspace.id &&
+          this.isVisibleProject(project) &&
+          !!project.member_role &&
+          !project.archived_at
+      )
       .map((project) => project.id);
     return projectIds;
   }
@@ -263,6 +289,7 @@ export class ProjectStore implements IProjectStore {
       .filter(
         (project) =>
           project.workspace === currentWorkspace.id &&
+          this.isVisibleProject(project) &&
           !!project.member_role &&
           project.is_favorite &&
           !project.archived_at
@@ -308,9 +335,17 @@ export class ProjectStore implements IProjectStore {
    *
    */
   fetchPartialProjects = async (workspaceSlug: string) => {
+    const requestVersion = (this.workspaceFetchVersions[workspaceSlug] ?? 0) + 1;
+    this.workspaceFetchVersions[workspaceSlug] = requestVersion;
+    const requestUserId = this.rootStore.user.data?.id;
     try {
       this.loader = "init-loader";
       const projectsResponse = await this.projectService.getProjectsLite(workspaceSlug);
+      if (
+        this.rootStore.user.data?.id !== requestUserId ||
+        this.workspaceFetchVersions[workspaceSlug] !== requestVersion
+      )
+        return projectsResponse;
       runInAction(() => {
         const workspace = this.rootStore.workspaceRoot.getWorkspaceBySlug(workspaceSlug);
         const visibleIds = new Set(projectsResponse.map((project) => project.id));
@@ -342,6 +377,9 @@ export class ProjectStore implements IProjectStore {
    *
    */
   fetchProjects = async (workspaceSlug: string) => {
+    const requestVersion = (this.workspaceFetchVersions[workspaceSlug] ?? 0) + 1;
+    this.workspaceFetchVersions[workspaceSlug] = requestVersion;
+    const requestUserId = this.rootStore.user.data?.id;
     try {
       if (this.workspaceProjectIds && this.workspaceProjectIds.length > 0) {
         this.loader = "mutation";
@@ -349,6 +387,11 @@ export class ProjectStore implements IProjectStore {
         this.loader = "init-loader";
       }
       const projectsResponse = await this.projectService.getProjects(workspaceSlug);
+      if (
+        this.rootStore.user.data?.id !== requestUserId ||
+        this.workspaceFetchVersions[workspaceSlug] !== requestVersion
+      )
+        return projectsResponse;
       runInAction(() => {
         const workspace = this.rootStore.workspaceRoot.getWorkspaceBySlug(workspaceSlug);
         const visibleIds = new Set(projectsResponse.map((project) => project.id));
@@ -379,16 +422,43 @@ export class ProjectStore implements IProjectStore {
    * @returns Promise<TProject>
    */
   fetchProjectDetails = async (workspaceSlug: string, projectId: string) => {
+    const key = `${workspaceSlug}/${projectId}`;
+    const requestVersion = (this.projectFetchVersions[key] ?? 0) + 1;
+    this.projectFetchVersions[key] = requestVersion;
+    const permission = this.rootStore.user.permission;
+    const requestUserId = this.rootStore.user.data?.id;
     try {
       const response = await this.projectService.getProject(workspaceSlug, projectId);
+      if (this.rootStore.user.data?.id !== requestUserId || this.projectFetchVersions[key] !== requestVersion)
+        return response;
       runInAction(() => {
         update(this.projectMap, [projectId], (p) => ({ ...p, ...response }));
       });
       return response;
     } catch (error) {
+      const status = typeof error === "object" && error !== null && "status" in error ? error.status : undefined;
+      if (
+        this.rootStore.user.data?.id === requestUserId &&
+        this.projectFetchVersions[key] === requestVersion &&
+        (status === 403 || status === 404)
+      ) {
+        runInAction(() => {
+          delete this.projectMap[projectId];
+          delete this.projectAnalyticsCountMap[projectId];
+          delete permission.workspaceProjectsPermissions[workspaceSlug]?.[projectId];
+          delete permission.projectUserInfo[workspaceSlug]?.[projectId];
+          this.rootStore.favorite.removeFavoriteFromStore(projectId);
+        });
+      }
       console.log("Error while fetching project details", error);
       throw error;
     }
+  };
+
+  invalidateProjectRequests = (workspaceSlug: string, projectId: string): void => {
+    const key = `${workspaceSlug}/${projectId}`;
+    this.projectFetchVersions[key] = (this.projectFetchVersions[key] ?? 0) + 1;
+    this.workspaceFetchVersions[workspaceSlug] = (this.workspaceFetchVersions[workspaceSlug] ?? 0) + 1;
   };
 
   /**

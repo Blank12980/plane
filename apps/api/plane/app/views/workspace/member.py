@@ -23,6 +23,7 @@ from plane.app.serializers import (
 from plane.app.views.base import BaseAPIView
 from plane.db.models import Project, ProjectMember, WorkspaceMember, DraftIssue
 from plane.utils.cache import invalidate_cache
+from plane.utils.project_access import projects_for_user
 
 from .. import BaseViewSet
 
@@ -267,15 +268,11 @@ class WorkspaceProjectMemberEndpoint(BaseAPIView):
 
     def get(self, request, slug):
         # Fetch all project IDs where the user is involved
-        project_ids = (
-            ProjectMember.objects.filter(member=request.user, is_active=True)
-            .values_list("project_id", flat=True)
-            .distinct()
-        )
+        project_ids = projects_for_user(request.user, slug).values("pk")
 
         # Get all the project members in which the user is involved
         project_members = ProjectMember.objects.filter(
-            workspace__slug=slug, project_id__in=project_ids, is_active=True
+            workspace__slug=slug, project_id__in=project_ids, is_active=True, is_instance_admin_access=False
         ).select_related("project", "member", "workspace")
         project_members = ProjectMemberRoleSerializer(project_members, many=True).data
 

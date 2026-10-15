@@ -43,11 +43,12 @@ from plane.db.models import (
     WorkspaceMemberInvite,
     Session,
 )
-from plane.license.models import Instance, InstanceAdmin
+from plane.license.models import InstanceAdmin
 from plane.utils.paginator import BasePaginator
 from plane.authentication.utils.host import user_ip
 from plane.bgtasks.user_deactivation_email_task import user_deactivation_email
 from plane.utils.host import base_host
+from plane.utils.project_access import is_instance_admin
 from plane.bgtasks.user_email_update_task import send_email_update_magic_code, send_email_update_confirmation
 from plane.authentication.rate_limit import EmailVerificationThrottle
 
@@ -75,7 +76,9 @@ class UserEndpoint(BaseViewSet):
     @method_decorator(vary_on_cookie)
     def retrieve(self, request):
         serialized_data = UserMeSerializer(request.user).data
-        return Response(serialized_data, status=status.HTTP_200_OK)
+        return Response(
+            {**serialized_data, "is_instance_admin": is_instance_admin(request.user)}, status=status.HTTP_200_OK
+        )
 
     @method_decorator(cache_control(private=True, max_age=12))
     @method_decorator(vary_on_cookie)
@@ -84,8 +87,7 @@ class UserEndpoint(BaseViewSet):
         return Response(serialized_data, status=status.HTTP_200_OK)
 
     def retrieve_instance_admin(self, request):
-        instance = Instance.objects.first()
-        is_admin = InstanceAdmin.objects.filter(instance=instance, user=request.user).exists()
+        is_admin = is_instance_admin(request.user)
         return Response({"is_instance_admin": is_admin}, status=status.HTTP_200_OK)
 
     def partial_update(self, request, *args, **kwargs):

@@ -57,7 +57,7 @@ export const TabNavigationRoot = observer(function TabNavigationRoot(props: TTab
 
   // Store hooks
   const { getPartialProjectById } = useProject();
-  const { allowPermissions, projectUserInfo } = useUserPermissions();
+  const { allowPermissions, canLeaveProject } = useUserPermissions();
   const {
     issue: { getIssueIdByIdentifier, getIssueById },
   } = useIssueDetail();
@@ -179,7 +179,7 @@ export const TabNavigationRoot = observer(function TabNavigationRoot(props: TTab
               project={project}
               isAdmin={isAdmin}
               isAuthorized={isAuthorized}
-              canLeaveProject={projectUserInfo[workspaceSlug]?.[projectId]?.original_role != null}
+              canLeaveProject={canLeaveProject(workspaceSlug, projectId)}
               onCopyText={handleCopyText}
               onLeaveProject={handleLeaveProject}
               onPublishModal={() => handlePublishModal(true)}

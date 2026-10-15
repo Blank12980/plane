@@ -22,6 +22,7 @@ import type { RootStore } from "@/plane-web/store/root.store";
 // services
 import projectMemberService from "@/services/project/project-member.service";
 import userService from "@/services/user.service";
+import { canLeaveProject as canLeaveMembership } from "@/helpers/project-access";
 
 // derived services
 const workspaceService = new WorkspaceService();
@@ -57,6 +58,7 @@ export interface IBaseUserPermissionStore {
   fetchUserProjectPermissions: (workspaceSlug: string) => Promise<IUserProjectsRole>;
   joinProject: (workspaceSlug: string, projectId: string) => Promise<void>;
   leaveProject: (workspaceSlug: string, projectId: string) => Promise<void>;
+  canLeaveProject: (workspaceSlug: string, projectId: string) => boolean;
   hasPageAccess: (workspaceSlug: string, key: string) => boolean;
 }
 
@@ -66,6 +68,8 @@ export interface IBaseUserPermissionStore {
  */
 export abstract class BaseUserPermissionStore implements IBaseUserPermissionStore {
   loader: boolean = false;
+  private membershipRequestVersions: Record<string, number> = {};
+  private permissionRequestVersions: Record<string, number> = {};
   // constants
   workspaceUserInfo: Record<string, IWorkspaceMemberMe> = {};
   projectUserInfo: Record<string, Record<string, TProjectMembership>> = {};
@@ -109,7 +113,10 @@ export abstract class BaseUserPermissionStore implements IBaseUserPermissionStor
   getWorkspaceRoleByWorkspaceSlug = computedFn(
     (workspaceSlug: string): TUserPermissions | EUserWorkspaceRoles | undefined => {
       if (!workspaceSlug) return undefined;
-      return this.workspaceUserInfo[workspaceSlug]?.role as TUserPermissions | EUserWorkspaceRoles | undefined;
+      if (this.store.user?.data?.is_instance_admin) return EUserWorkspaceRoles.ADMIN;
+      const info = this.workspaceUserInfo[workspaceSlug];
+      if (info?.is_instance_admin_access && !this.store.user?.data?.is_instance_admin) return undefined;
+      return info?.role as TUserPermissions | EUserWorkspaceRoles | undefined;
     }
   );
 
@@ -122,10 +129,18 @@ export abstract class BaseUserPermissionStore implements IBaseUserPermissionStor
   protected getProjectRole = computedFn((workspaceSlug: string, projectId?: string): EUserPermissions | undefined => {
     if (!workspaceSlug || !projectId) return undefined;
     const projectRole = this.workspaceProjectsPermissions?.[workspaceSlug]?.[projectId];
-    const workspaceRole = this.workspaceUserInfo?.[workspaceSlug]?.role;
+    const workspaceRole = this.getWorkspaceRoleByWorkspaceSlug(workspaceSlug);
     if (workspaceRole === EUserWorkspaceRoles.ADMIN) return EUserPermissions.ADMIN;
     else return projectRole || undefined;
   });
+
+  canLeaveProject = computedFn((workspaceSlug: string, projectId: string): boolean =>
+    canLeaveMembership(
+      this.store.projectRoot.project.projectMap[projectId],
+      this.projectUserInfo[workspaceSlug]?.[projectId],
+      this.store.user?.data?.id
+    )
+  );
 
   /**
    * @description Returns the project permissions by workspace slug
@@ -234,9 +249,11 @@ export abstract class BaseUserPermissionStore implements IBaseUserPermissionStor
    * @returns { Promise<IWorkspaceMemberMe | undefined> }
    */
   fetchUserWorkspaceInfo = async (workspaceSlug: string): Promise<IWorkspaceMemberMe> => {
+    const requestUserId = this.store.user?.data?.id;
     try {
       this.loader = true;
       const response = await workspaceService.workspaceMemberMe(workspaceSlug);
+      if (this.store.user?.data?.id !== requestUserId) return response;
       if (response) {
         runInAction(() => {
           set(this.workspaceUserInfo, [workspaceSlug], response);
@@ -277,8 +294,14 @@ export abstract class BaseUserPermissionStore implements IBaseUserPermissionStor
    * @returns { Promise<TProjectMembership | undefined> }
    */
   fetchUserProjectInfo = async (workspaceSlug: string, projectId: string): Promise<TProjectMembership> => {
+    const key = `${workspaceSlug}/${projectId}`;
+    const requestVersion = (this.membershipRequestVersions[key] ?? 0) + 1;
+    this.membershipRequestVersions[key] = requestVersion;
+    const requestUserId = this.store.user?.data?.id;
     try {
       const response = await projectMemberService.projectMemberMe(workspaceSlug, projectId);
+      if (this.membershipRequestVersions[key] !== requestVersion || this.store.user?.data?.id !== requestUserId)
+        return response;
       if (response) {
         runInAction(() => {
           set(this.projectUserInfo, [workspaceSlug, projectId], response);
@@ -287,6 +310,19 @@ export abstract class BaseUserPermissionStore implements IBaseUserPermissionStor
       }
       return response;
     } catch (error) {
+      const status = typeof error === "object" && error !== null && "status" in error ? error.status : undefined;
+      if (
+        (status === 403 || status === 404) &&
+        this.membershipRequestVersions[key] === requestVersion &&
+        this.store.user?.data?.id === requestUserId
+      ) {
+        runInAction(() => {
+          unset(this.projectUserInfo, [workspaceSlug, projectId]);
+          unset(this.workspaceProjectsPermissions, [workspaceSlug, projectId]);
+          unset(this.store.projectRoot.project.projectMap, [projectId]);
+          this.store.favorite.removeFavoriteFromStore(projectId);
+        });
+      }
       console.error("Error fetching user project information", error);
       throw error;
     }
@@ -298,8 +334,16 @@ export abstract class BaseUserPermissionStore implements IBaseUserPermissionStor
    * @returns { Promise<IUserProjectsRole | undefined> }
    */
   fetchUserProjectPermissions = async (workspaceSlug: string): Promise<IUserProjectsRole> => {
+    const requestUserId = this.store.user?.data?.id;
+    const requestVersion = (this.permissionRequestVersions[workspaceSlug] ?? 0) + 1;
+    this.permissionRequestVersions[workspaceSlug] = requestVersion;
     try {
       const response = await workspaceService.getWorkspaceUserProjectsRole(workspaceSlug);
+      if (
+        this.store.user?.data?.id !== requestUserId ||
+        this.permissionRequestVersions[workspaceSlug] !== requestVersion
+      )
+        return response;
       runInAction(() => {
         set(this.workspaceProjectsPermissions, [workspaceSlug], response);
       });
@@ -341,10 +385,15 @@ export abstract class BaseUserPermissionStore implements IBaseUserPermissionStor
   leaveProject = async (workspaceSlug: string, projectId: string): Promise<void> => {
     try {
       await userService.leaveProject(workspaceSlug, projectId);
+      this.store.projectRoot.project.invalidateProjectRequests(workspaceSlug, projectId);
+      const key = `${workspaceSlug}/${projectId}`;
+      this.membershipRequestVersions[key] = (this.membershipRequestVersions[key] ?? 0) + 1;
+      this.permissionRequestVersions[workspaceSlug] = (this.permissionRequestVersions[workspaceSlug] ?? 0) + 1;
       runInAction(() => {
         unset(this.workspaceProjectsPermissions, [workspaceSlug, projectId]);
         unset(this.projectUserInfo, [workspaceSlug, projectId]);
         unset(this.store.projectRoot.project.projectMap, [projectId]);
+        unset(this.store.projectRoot.project.projectAnalyticsCountMap, [projectId]);
         this.store.favorite.removeFavoriteFromStore(projectId);
       });
       await this.store.projectRoot.project.fetchProjects(workspaceSlug).catch((error: unknown) => {

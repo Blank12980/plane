@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
 from plane.db.models import Project, Workspace
@@ -18,10 +18,19 @@ from plane.license.workspace_access import (
 def sync_instance_admin_access(sender, instance, created, **kwargs):
     if instance.user is None:
         return
-    if instance.deleted_at is not None:
-        revoke_instance_admin_access(instance.user)
-    elif instance.role >= INSTANCE_ADMIN_ROLE:
+    if instance.deleted_at is None and instance.role >= INSTANCE_ADMIN_ROLE:
         grant_instance_admin_access(instance.user)
+    elif not InstanceAdmin.objects.filter(user=instance.user, role__gte=INSTANCE_ADMIN_ROLE).exists():
+        revoke_instance_admin_access(instance.user)
+
+
+@receiver(post_delete, sender=InstanceAdmin)
+def revoke_deleted_instance_admin_access(sender, instance, **kwargs):
+    if (
+        instance.user_id
+        and not InstanceAdmin.objects.filter(user_id=instance.user_id, role__gte=INSTANCE_ADMIN_ROLE).exists()
+    ):
+        revoke_instance_admin_access(instance.user)
 
 
 @receiver(post_save, sender=Workspace)

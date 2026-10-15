@@ -332,13 +332,17 @@ class ProjectMemberViewSet(BaseViewSet):
         )
         if project_member.is_instance_admin_access:
             return Response(
-                {"error": "Instance administrators cannot leave individual projects"},
+                {
+                    "error": "Доступ администратора инстанса не является членством в проекте.",
+                    "code": "IMPLICIT_ADMIN_ACCESS",
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         # Check if the leaving user is the only admin of the project
         if (
             project_member.role == 20
+            and not is_workspace_admin(request.user, slug)
             and not ProjectMember.objects.filter(
                 workspace__slug=slug,
                 project_id=project_id,
@@ -350,7 +354,8 @@ class ProjectMemberViewSet(BaseViewSet):
         ):
             return Response(
                 {
-                    "error": "You cannot leave the project as your the only admin of the project you will have to either delete the project or create an another admin"  # noqa: E501
+                    "error": "Назначьте другого администратора проекта перед выходом.",
+                    "code": "LAST_PROJECT_ADMIN",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -385,13 +390,18 @@ class ProjectMemberUserEndpoint(BaseAPIView):
                     "role": ROLE.ADMIN.value,
                     "original_role": None,
                     "created_at": None,
+                    "can_leave": False,
+                    "is_instance_admin_access": True,
                 },
                 status=status.HTTP_200_OK,
             )
         if project_member is None:
             return Response({"error": "Project membership not found"}, status=status.HTTP_404_NOT_FOUND)
-        serializer = ProjectMemberSerializer(project_member)
-        data = {**serializer.data, "original_role": project_member.role}
+        data = {
+            **ProjectMemberRoleSerializer(project_member).data,
+            "can_leave": not project_member.is_instance_admin_access,
+            "is_instance_admin_access": project_member.is_instance_admin_access,
+        }
         if project_member.is_instance_admin_access:
             data.update(id=None, original_role=None, created_at=None)
         return Response(data, status=status.HTTP_200_OK)
@@ -403,9 +413,11 @@ class UserProjectRolesEndpoint(BaseAPIView):
 
     def get(self, request, slug):
         project_members = ProjectMember.objects.filter(
+            project_id__in=projects_for_user(request.user, slug).values("pk"),
             workspace__slug=slug,
             member_id=request.user.id,
             is_active=True,
+            is_instance_admin_access=False,
             member__member_workspace__workspace__slug=slug,
             member__member_workspace__is_active=True,
         ).values("project_id", "role")

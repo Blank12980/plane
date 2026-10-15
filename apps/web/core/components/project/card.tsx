@@ -25,7 +25,7 @@ import { copyUrlToClipboard, cn, getFileURL, renderFormattedDate } from "@plane/
 // hooks
 import { useMember } from "@/hooks/store/use-member";
 import { useProject } from "@/hooks/store/use-project";
-import { useUser, useUserPermissions } from "@/hooks/store/user";
+import { useUserPermissions } from "@/hooks/store/user";
 import { useAppRouter } from "@/hooks/use-app-router";
 import { usePlatformOS } from "@/hooks/use-platform-os";
 // local imports
@@ -52,8 +52,7 @@ export const ProjectCard = observer(function ProjectCard(props: Props) {
   // store hooks
   const { getUserDetails } = useMember();
   const { addProjectToFavorites, removeProjectFromFavorites } = useProject();
-  const { allowPermissions } = useUserPermissions();
-  const { data: currentUser } = useUser();
+  const { allowPermissions, canLeaveProject } = useUserPermissions();
   // hooks
   const { isMobile } = usePlatformOS();
   const { t } = useTranslation();
@@ -67,7 +66,7 @@ export const ProjectCard = observer(function ProjectCard(props: Props) {
     project.id
   );
   const isMemberOfProject = !!project.member_role || isWorkspaceAdmin || hasProjectAdminAccess;
-  const canLeaveProject = !!currentUser?.id && !!project.members?.includes(currentUser.id);
+  const canLeaveCurrentProject = !!workspaceSlug && canLeaveProject(workspaceSlug.toString(), project.id);
   const shouldRenderFavorite =
     isMemberOfProject &&
     allowPermissions([EUserPermissions.ADMIN, EUserPermissions.MEMBER], EUserPermissionsLevel.WORKSPACE);
@@ -144,7 +143,7 @@ export const ProjectCard = observer(function ProjectCard(props: Props) {
       action: () => setLeaveProjectModal(true),
       title: "Покинуть проект",
       icon: LogOut,
-      shouldRender: canLeaveProject && !isArchived,
+      shouldRender: canLeaveCurrentProject,
     },
     {
       key: "open-new-tab",
@@ -308,6 +307,21 @@ export const ProjectCard = observer(function ProjectCard(props: Props) {
               </Tooltip>
               {isArchived && <div className="text-11 font-medium text-placeholder">Архив</div>}
             </div>
+            {canLeaveCurrentProject && (
+              <button
+                type="button"
+                title="Покинуть проект"
+                className="flex items-center gap-1 rounded-sm p-1 text-13 text-placeholder hover:bg-layer-1 hover:text-secondary"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setLeaveProjectModal(true);
+                }}
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Покинуть
+              </button>
+            )}
             {isArchived ? (
               hasAdminRole && (
                 <div className="flex items-center justify-center gap-2">

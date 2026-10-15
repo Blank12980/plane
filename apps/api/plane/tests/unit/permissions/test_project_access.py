@@ -244,3 +244,103 @@ def test_member_cannot_use_joined_project_url_to_read_another_projects_page(acce
     force_authenticate(request, user=user)
     response = GuardedView.as_view()(request, slug=workspace.slug, project_id=joined.id, page_id=page.id)
     assert response.status_code == 403
+
+
+def test_stale_instance_projection_does_not_make_a_regular_user_a_project_member(access_scope):
+    user, workspace, _, public, private, joined, _ = access_scope
+    ProjectMember.objects.bulk_create(
+        [ProjectMember(workspace=workspace, project=private, member=user, role=20, is_instance_admin_access=True)]
+    )
+    assert ids(projects_for_user(user, workspace.slug, include_public=True)) == {public.id, joined.id}
+    with pytest.raises(PermissionDenied):
+        require_project_access(user, workspace.slug, private.id)
+
+
+def test_stale_workspace_projection_does_not_grant_admin_access(access_scope):
+    from plane.utils.project_access import is_workspace_admin
+
+    user, workspace, membership, *_ = access_scope
+    WorkspaceMember.objects.filter(pk=membership.id).update(role=20, is_instance_admin_access=True)
+    assert not is_workspace_admin(user, workspace.slug)
+    assert not projects_for_user(user, workspace.slug).exists()
+
+
+def test_workspace_invitation_does_not_reactivate_departed_project_members(access_scope):
+    from plane.license.workspace_access import promote_explicit_workspace_membership
+
+    user, workspace, _, _, _, joined, membership = access_scope
+    ProjectMember.objects.filter(pk=membership.pk).update(is_active=False)
+    promote_explicit_workspace_membership(user, workspace, role=15)
+    membership.refresh_from_db()
+    assert not membership.is_active
+    with pytest.raises(PermissionDenied):
+        require_project_access(user, workspace.slug, joined.id)
+
+
+def make_instance():
+    return Instance.objects.create(
+        instance_name="Privacy", instance_id=uuid4().hex, current_version="test", last_checked_at=timezone.now()
+    )
+
+
+@pytest.mark.parametrize("action", ["downgrade", "soft_delete", "hard_delete"])
+def test_losing_instance_admin_role_revokes_technical_but_preserves_explicit_memberships(access_scope, action):
+    user, workspace, workspace_member, _, private, joined, membership = access_scope
+    admin = InstanceAdmin.objects.create(instance=make_instance(), user=user, role=20)
+    projection = ProjectMember.objects.get(project=private, member=user)
+    assert projection.is_active and projection.is_instance_admin_access
+    if action == "hard_delete":
+        admin.delete(soft=False)
+    else:
+        if action == "downgrade":
+            admin.role = 5
+        else:
+            admin.deleted_at = timezone.now()
+        admin.save()
+    projection.refresh_from_db()
+    workspace_member.refresh_from_db()
+    membership.refresh_from_db()
+    assert not projection.is_active and not projection.is_instance_admin_access and projection.role == 5
+    assert workspace_member.is_active and workspace_member.role == 15
+    assert membership.is_active and membership.role == 15
+    require_project_access(user, workspace.slug, joined.id)
+    with pytest.raises(PermissionDenied):
+        require_project_access(user, workspace.slug, private.id)
+
+
+def test_removing_one_admin_record_keeps_access_when_another_is_current(access_scope):
+    user, workspace, _, _, private, *_ = access_scope
+    admin = InstanceAdmin.objects.create(instance=make_instance(), user=user, role=20)
+    InstanceAdmin.objects.create(instance=make_instance(), user=user, role=15)
+    admin.delete(soft=False)
+    assert ProjectMember.objects.get(project=private, member=user).is_instance_admin_access
+    require_project_access(user, workspace.slug, private.id)
+
+
+def test_migration_revokes_only_stale_projections_and_restores_previous_roles(access_scope):
+    from importlib import import_module
+    from django.apps import apps
+    from django.db import connection
+
+    user, workspace, workspace_member, public, private, joined, membership = access_scope
+    stale = ProjectMember.objects.create(
+        workspace=workspace, project=private, member=user, role=20, is_instance_admin_access=True
+    )
+    WorkspaceMember.objects.filter(pk=workspace_member.pk).update(
+        role=20, is_instance_admin_access=True, instance_admin_previous_role=15
+    )
+    current_admin = User(email="current-admin@example.com", username="current-admin")
+    User.objects.bulk_create([current_admin])
+    InstanceAdmin.objects.create(instance=make_instance(), user=current_admin, role=20)
+    migration = import_module("plane.db.migrations.0133_revoke_stale_instance_admin_access")
+    for _ in range(2):
+        migration.revoke_stale_instance_admin_access(apps, SimpleNamespace(connection=connection))
+    stale.refresh_from_db()
+    workspace_member.refresh_from_db()
+    membership.refresh_from_db()
+    assert not stale.is_active and stale.role == 5 and not stale.is_instance_admin_access
+    assert workspace_member.is_active and workspace_member.role == 15 and not workspace_member.is_instance_admin_access
+    assert workspace_member.instance_admin_previous_role is None
+    assert membership.is_active and membership.role == 15
+    assert ProjectMember.objects.get(project=private, member=current_admin).is_instance_admin_access
+    assert ids(projects_for_user(user, workspace.slug, include_public=True)) == {public.id, joined.id}
