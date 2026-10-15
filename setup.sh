@@ -323,6 +323,7 @@ function build_local_images() {
         "admin|plane-admin|${REPO_ROOT}|${REPO_ROOT}/apps/admin/Dockerfile.admin"
         "space|plane-space|${REPO_ROOT}|${REPO_ROOT}/apps/space/Dockerfile.space"
         "live|plane-live|${REPO_ROOT}|${REPO_ROOT}/apps/live/Dockerfile.live"
+        "mcp|plane-mcp|${REPO_ROOT}|${REPO_ROOT}/apps/mcp/Dockerfile.mcp"
     )
 
     local no_cache=""

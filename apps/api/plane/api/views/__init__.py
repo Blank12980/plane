@@ -62,3 +62,7 @@ from .user import UserEndpoint
 from .invite import WorkspaceInvitationsViewset
 
 from .sticky import StickyViewSet
+
+from .tag import WorkspaceTagAPIEndpoint, WorkItemTagAPIEndpoint
+
+from .worklog import WorkItemWorkLogAPIEndpoint, TimeReportAPIEndpoint

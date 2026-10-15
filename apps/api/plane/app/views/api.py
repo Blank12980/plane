@@ -3,7 +3,6 @@
 # See the LICENSE file for details.
 
 # Python import
-from uuid import uuid4
 from typing import Optional
 
 # Third party
@@ -15,24 +14,16 @@ from rest_framework import status
 from .base import BaseAPIView
 from plane.db.models import APIToken
 from plane.app.serializers import APITokenSerializer, APITokenReadSerializer
+from plane.app.serializers.api import APITokenCreateSerializer
 
 
 class ApiTokenEndpoint(BaseAPIView):
     def post(self, request: Request) -> Response:
-        label = request.data.get("label", str(uuid4().hex))
-        description = request.data.get("description", "")
-        expired_at = request.data.get("expired_at", None)
-
         # Check the user type
         user_type = 1 if request.user.is_bot else 0
-
-        api_token = APIToken.objects.create(
-            label=label,
-            description=description,
-            user=request.user,
-            user_type=user_type,
-            expired_at=expired_at,
-        )
+        creation = APITokenCreateSerializer(data=request.data, context={"request": request})
+        creation.is_valid(raise_exception=True)
+        api_token = creation.save(user=request.user, user_type=user_type)
 
         serializer = APITokenSerializer(api_token)
         # Token will be only visible while creating
@@ -54,7 +45,7 @@ class ApiTokenEndpoint(BaseAPIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def patch(self, request: Request, pk: str) -> Response:
-        api_token = APIToken.objects.get(user=request.user, pk=pk)
+        api_token = APIToken.objects.get(user=request.user, pk=pk, is_service=False)
         serializer = APITokenSerializer(api_token, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()

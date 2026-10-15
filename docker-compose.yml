@@ -165,6 +165,25 @@ services:
       REDIS_URL: redis://plane-redis:6379/
       LIVE_BASE_PATH: /live
 
+  # MCP server for AI agents (https://<APP_HOST>/mcp). Stateless adapter over
+  # the public API; every request runs with the caller's own API token.
+  mcp:
+    container_name: plane-mcp
+    build:
+      context: .
+      dockerfile: ./apps/mcp/Dockerfile.mcp
+      args:
+        DOCKER_BUILDKIT: 1
+    restart: always
+    environment:
+      PORT: 3000
+      API_BASE_URL: http://api:8000
+      APP_BASE_URL: ${APP_HOST:-http://localhost}
+      DEFAULT_WORKSPACE_SLUG: ${MCP_DEFAULT_WORKSPACE_SLUG:-}
+      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
+    depends_on:
+      - api
+
   plane-db:
     container_name: plane-db
     image: postgres:15.7-alpine
@@ -244,6 +263,7 @@ services:
       - space
       - admin
       - live
+      - mcp
 
 networks:
   default:

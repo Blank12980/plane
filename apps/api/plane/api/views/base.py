@@ -24,7 +24,8 @@ from rest_framework.generics import GenericAPIView
 # Module imports
 from plane.db.models.api import APIToken
 from plane.api.middleware.api_authentication import APIKeyAuthentication
-from plane.api.rate_limit import ApiKeyRateThrottle, ServiceTokenRateThrottle
+from plane.api.rate_limit import ApiKeyRateThrottle, ServiceTokenRateThrottle, TokenRateThrottle
+from plane.api.permissions import TokenScopePermission, TokenWorkspacePermission
 from plane.utils.exception_logger import log_exception
 from plane.utils.paginator import BasePaginator
 from plane.utils.core.mixins import ReadReplicaControlMixin
@@ -32,6 +33,58 @@ from plane.utils.project_access import ProjectAccessMixin
 
 
 logger = logging.getLogger("plane.api")
+
+
+def check_token_permissions(view, request):
+    """Token restrictions (workspace binding, scopes) are checked before the view's own role
+    based permissions, even when a view overrides ``get_permissions``. They can only narrow
+    access down."""
+    for permission in (TokenWorkspacePermission(), TokenScopePermission()):
+        if not permission.has_permission(request, view):
+            view.permission_denied(request, message=permission.message, code=None)
+
+
+class TokenAccessMixin:
+    def check_permissions(self, request):
+        check_token_permissions(self, request)
+        super().check_permissions(request)
+
+    def get_throttles(self):
+        throttle_classes = []
+        api_token = getattr(self.request, "api_token", None)
+        api_key = self.request.headers.get("X-Api-Key")
+
+        if api_token is None and api_key:
+            api_token = APIToken.objects.filter(token=api_key).first()
+
+        if api_token is not None:
+            if api_token.is_service:
+                throttle_classes.append(ServiceTokenRateThrottle())
+                return throttle_classes
+
+            token_throttle = TokenRateThrottle.for_token(api_token)
+            if token_throttle is not None:
+                throttle_classes.append(token_throttle)
+                return throttle_classes
+
+        throttle_classes.append(ApiKeyRateThrottle())
+
+        return throttle_classes
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        # Call super to get the default response
+        response = super().finalize_response(request, response, *args, **kwargs)
+
+        # Add custom headers if they exist in the request META
+        ratelimit_remaining = request.META.get("X-RateLimit-Remaining")
+        if ratelimit_remaining is not None:
+            response["X-RateLimit-Remaining"] = ratelimit_remaining
+
+        ratelimit_reset = request.META.get("X-RateLimit-Reset")
+        if ratelimit_reset is not None:
+            response["X-RateLimit-Reset"] = ratelimit_reset
+
+        return response
 
 
 class TimezoneMixin:
@@ -48,7 +101,9 @@ class TimezoneMixin:
             timezone.deactivate()
 
 
-class BaseAPIView(ProjectAccessMixin, TimezoneMixin, GenericAPIView, ReadReplicaControlMixin, BasePaginator):
+class BaseAPIView(
+    TokenAccessMixin, ProjectAccessMixin, TimezoneMixin, GenericAPIView, ReadReplicaControlMixin, BasePaginator
+):
     authentication_classes = [APIKeyAuthentication]
 
     permission_classes = [IsAuthenticated]
@@ -59,21 +114,6 @@ class BaseAPIView(ProjectAccessMixin, TimezoneMixin, GenericAPIView, ReadReplica
         for backend in list(self.filter_backends):
             queryset = backend().filter_queryset(self.request, queryset, self)
         return queryset
-
-    def get_throttles(self):
-        throttle_classes = []
-        api_key = self.request.headers.get("X-Api-Key")
-
-        if api_key:
-            service_token = APIToken.objects.filter(token=api_key, is_service=True).first()
-
-            if service_token:
-                throttle_classes.append(ServiceTokenRateThrottle())
-                return throttle_classes
-
-        throttle_classes.append(ApiKeyRateThrottle())
-
-        return throttle_classes
 
     def handle_exception(self, exc):
         """
@@ -126,21 +166,6 @@ class BaseAPIView(ProjectAccessMixin, TimezoneMixin, GenericAPIView, ReadReplica
             response = self.handle_exception(exc)
             return exc
 
-    def finalize_response(self, request, response, *args, **kwargs):
-        # Call super to get the default response
-        response = super().finalize_response(request, response, *args, **kwargs)
-
-        # Add custom headers if they exist in the request META
-        ratelimit_remaining = request.META.get("X-RateLimit-Remaining")
-        if ratelimit_remaining is not None:
-            response["X-RateLimit-Remaining"] = ratelimit_remaining
-
-        ratelimit_reset = request.META.get("X-RateLimit-Reset")
-        if ratelimit_reset is not None:
-            response["X-RateLimit-Reset"] = ratelimit_reset
-
-        return response
-
     @property
     def workspace_slug(self):
         return self.kwargs.get("slug", None)
@@ -165,7 +190,9 @@ class BaseAPIView(ProjectAccessMixin, TimezoneMixin, GenericAPIView, ReadReplica
         return expand if expand else None
 
 
-class BaseViewSet(ProjectAccessMixin, TimezoneMixin, ReadReplicaControlMixin, ModelViewSet, BasePaginator):
+class BaseViewSet(
+    TokenAccessMixin, ProjectAccessMixin, TimezoneMixin, ReadReplicaControlMixin, ModelViewSet, BasePaginator
+):
     model = None
 
     authentication_classes = [APIKeyAuthentication]

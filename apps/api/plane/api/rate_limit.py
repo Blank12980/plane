@@ -89,3 +89,35 @@ class ServiceTokenRateThrottle(SimpleRateThrottle):
             request.META["X-RateLimit-Reset"] = reset_time
 
         return allowed
+
+
+DEFAULT_TOKEN_RATE_LIMIT = "60/min"
+
+
+def is_valid_rate(rate):
+    try:
+        num, period = rate.split("/")
+        return int(num) > 0 and period[0] in ("s", "m", "h", "d")
+    except (AttributeError, ValueError, IndexError):
+        return False
+
+
+class TokenRateThrottle(ApiKeyRateThrottle):
+    """Per-token rate limit taken from ``APIToken.allowed_rate_limit``.
+
+    Tokens that keep the model default (``60/min``) fall back to ``API_KEY_RATE_LIMIT`` so
+    existing installations keep their configured global limit.
+    """
+
+    scope = "api_token"
+
+    def __init__(self, rate):
+        self.rate = rate
+        super().__init__()
+
+    @classmethod
+    def for_token(cls, api_token):
+        rate = getattr(api_token, "allowed_rate_limit", None)
+        if not rate or rate == DEFAULT_TOKEN_RATE_LIMIT or not is_valid_rate(rate):
+            return None
+        return cls(rate)

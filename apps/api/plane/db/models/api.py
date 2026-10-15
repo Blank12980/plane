@@ -20,6 +20,25 @@ def generate_token():
     return "plane_api_" + uuid4().hex
 
 
+# Scopes a token can be restricted to. An empty list keeps the legacy behaviour (full access
+# within the user's own permissions). Scopes never grant more than the user's role allows.
+API_TOKEN_SCOPES = (
+    "read",
+    "issues:write",
+    "issues:delete",
+    "comments:write",
+    "worklogs:write",
+    "tags:write",
+    "cycles:write",
+    "modules:write",
+    "intake:write",
+)
+
+
+def default_token_scopes():
+    return []
+
+
 class APIToken(BaseModel):
     # Meta information
     label = models.CharField(max_length=255, default=generate_label_token)
@@ -37,6 +56,7 @@ class APIToken(BaseModel):
     expired_at = models.DateTimeField(blank=True, null=True)
     is_service = models.BooleanField(default=False)
     allowed_rate_limit = models.CharField(max_length=255, default="60/min")
+    scopes = models.JSONField(default=default_token_scopes, blank=True)
 
     class Meta:
         verbose_name = "API Token"
@@ -46,6 +66,16 @@ class APIToken(BaseModel):
 
     def __str__(self):
         return str(self.user.id)
+
+    @property
+    def is_scoped(self):
+        return bool(self.scopes)
+
+    def has_scope(self, scope):
+        # Legacy tokens without scopes keep full access
+        if not self.scopes:
+            return True
+        return scope in self.scopes
 
 
 class APIActivityLog(BaseModel):
