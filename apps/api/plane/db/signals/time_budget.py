@@ -9,7 +9,9 @@ from plane.utils.module_time_budget import check_issue_time_budgets, check_linke
 @receiver(post_save, sender=IssueWorkLog, dispatch_uid="worklog_time_budget")
 def worklog_saved(sender, instance, raw=False, **kwargs):
     if not raw and instance.deleted_at is None:
-        issue_id, month = instance.issue_id, instance.logged_on.replace(day=1)
+        # Model saves accept ISO strings too; signals run before a DB reload.
+        logged_on = sender._meta.get_field("logged_on").to_python(instance.logged_on)
+        issue_id, month = instance.issue_id, logged_on.replace(day=1)
         transaction.on_commit(lambda: check_issue_time_budgets(issue_id, month), robust=True)
 
 

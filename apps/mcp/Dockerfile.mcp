@@ -40,8 +40,9 @@ ENV TURBO_TELEMETRY_DISABLED=1
 
 RUN pnpm turbo run build --filter=mcp
 
-# Keep only production dependencies for the runtime image
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store CI=true pnpm --filter=mcp deploy --prod --legacy --offline --ignore-scripts --store-dir=/pnpm/store /app/deploy
+# Use the dedicated deployment lockfile so the offline production install does
+# not re-resolve optional development dependencies with the legacy deploy path.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store CI=true pnpm --config.inject-workspace-packages=true --filter=mcp deploy --prod --offline --ignore-scripts --store-dir=/pnpm/store /app/deploy
 
 # *****************************************************************************
 # STAGE 3: Run the project

@@ -145,6 +145,22 @@ class TestWorkItemTagsAPI:
 @pytest.mark.contract
 @pytest.mark.django_db
 class TestWorkLogsAPI:
+    def test_string_date_schedules_the_monthly_budget_check(self, issue, member, django_capture_on_commit_callbacks):
+        from datetime import date
+        from unittest.mock import patch
+
+        with patch("plane.db.signals.time_budget.check_issue_time_budgets") as check:
+            with django_capture_on_commit_callbacks(execute=True):
+                IssueWorkLog.objects.create(
+                    issue=issue,
+                    project=issue.project,
+                    workspace=issue.workspace,
+                    logged_by=member,
+                    duration_minutes=30,
+                    logged_on="2026-10-15",
+                )
+            check.assert_called_once_with(issue.id, date(2026, 10, 1))
+
     def url(self, workspace, issue):
         return f"{base(workspace)}/projects/{issue.project_id}/work-items/{issue.id}/worklogs/"
 
@@ -242,6 +258,21 @@ class TestTimeReportAPI:
         assert response.status_code == 200
         assert response.data["total_minutes"] == 105
 
+    def test_instance_admin_sees_all_projects_without_membership(self, workspace, logs):
+        from django.utils import timezone
+        from plane.db.models import User
+        from plane.license.models import Instance, InstanceAdmin
+
+        admin = User.objects.create(email="instance-report@gizmo.so", username="instance-report")
+        instance = Instance.objects.create(
+            instance_name="MCP", instance_id="mcp-report", current_version="test", last_checked_at=timezone.now()
+        )
+        InstanceAdmin.objects.create(instance=instance, user=admin, role=15)
+        client = client_for(admin, workspace, scopes=["read"])
+        response = client.get(self.url(workspace))
+        assert response.status_code == 200
+        assert response.data["total_minutes"] == 605
+
     def test_revoked_workspace_membership_hides_report(self, workspace, logs, member):
         client = client_for(member, workspace, scopes=["read"])
         WorkspaceMember.objects.filter(workspace=workspace, member=member).update(is_active=False)
@@ -273,3 +304,28 @@ class TestTimeReportAPI:
             api_key_client.get(self.url(workspace), {"date_from": "2026-10-02", "date_to": "2026-10-01"}).status_code
             == 400
         )
+
+
+@pytest.mark.contract
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "method,path,payload",
+    [
+        ("get", "tags/", {}),
+        ("get", "time-report/", {}),
+        ("get", "projects/{project}/work-items/{issue}/tags/", {}),
+        ("get", "projects/{project}/work-items/{issue}/worklogs/", {}),
+        ("post", "projects/{project}/work-items/{issue}/worklogs/", {"duration_minutes": 10}),
+        ("put", "projects/{project}/work-items/{issue}/tags/", {"tag_ids": []}),
+    ],
+)
+def test_mcp_api_does_not_bypass_workspace_client_role(workspace, issue, method, path, payload):
+    from plane.db.models import User
+
+    user = User.objects.create(email="mcp-client@gizmo.so", username="mcp-client")
+    WorkspaceMember.objects.create(workspace=workspace, member=user, role=3)
+    ProjectMember.objects.create(project=issue.project, workspace=workspace, member=user, role=15)
+    client = client_for(user, workspace, scopes=["read", "worklogs:write", "tags:write"])
+    url = f"{base(workspace)}/{path.format(project=issue.project_id, issue=issue.id)}"
+    response = getattr(client, method)(url, payload, format="json")
+    assert response.status_code == 403

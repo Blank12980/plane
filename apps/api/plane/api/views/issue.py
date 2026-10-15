@@ -1339,6 +1339,9 @@ class IssueCommentListCreateAPIEndpoint(BaseAPIView):
     use_read_replica = True
 
     def get_queryset(self):
+        order_by = self.request.query_params.get("order_by", "-created_at")
+        if order_by not in ("created_at", "-created_at"):
+            order_by = "-created_at"
         return (
             IssueComment.objects.filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
@@ -1358,7 +1361,7 @@ class IssueCommentListCreateAPIEndpoint(BaseAPIView):
                     )
                 )
             )
-            .order_by(self.kwargs.get("order_by", "-created_at"))
+            .order_by(order_by, "id")
             .distinct()
         )
 

@@ -74,7 +74,7 @@ export const contextTools = [
     name: "list_members",
     title: "List members",
     description:
-      "Lists members of a project (when project is given) or of the whole workspace. Use the ids as assignees.",
+      "Lists members of a project (when project is given) or of the whole workspace (workspace admin only). Use the ids as assignees.",
     scope: "read",
     input: { project: project.optional() },
     annotations: READ_ONLY,

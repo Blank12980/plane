@@ -300,3 +300,43 @@ def test_comment_author_can_edit_their_comment(workspace, project, issue, create
     assert response.status_code == 200
     comment.refresh_from_db()
     assert comment.comment_html == "<p>Changed</p>"
+
+
+@pytest.mark.contract
+@pytest.mark.django_db
+def test_admin_can_edit_others_comments(workspace, project, issue, create_user):
+    from plane.db.models import User
+
+    author = User.objects.create(email="other-author@gizmo.so", username="other-author")
+    comment = IssueComment.objects.create(
+        issue=issue, project=project, workspace=workspace, actor=author, comment_html="<p>Original</p>"
+    )
+    client = token_client(create_user, workspace=workspace, scopes=["read", "comments:write"])
+    response = client.patch(
+        f"{issues_url(workspace, project)}{issue.id}/comments/{comment.id}/",
+        {"comment_html": "<p>Moderated</p>"},
+        format="json",
+    )
+    assert response.status_code == 200
+
+
+@pytest.mark.contract
+@pytest.mark.django_db
+def test_comment_order_is_applied_before_pagination(workspace, project, issue, create_user):
+    from datetime import timedelta
+    from django.utils import timezone
+
+    comments = [
+        IssueComment.objects.create(
+            issue=issue, project=project, workspace=workspace, actor=create_user, comment_html=f"<p>{index}</p>"
+        )
+        for index in range(2)
+    ]
+    IssueComment.objects.filter(pk=comments[0].pk).update(created_at=timezone.now() - timedelta(days=1))
+    client = token_client(create_user, workspace=workspace, scopes=["read"])
+    url = f"{issues_url(workspace, project)}{issue.id}/comments/"
+    oldest = client.get(url, {"per_page": 1, "order_by": "created_at"})
+    newest = client.get(url, {"per_page": 1, "order_by": "-created_at"})
+    assert oldest.status_code == newest.status_code == 200
+    assert str(oldest.data["results"][0]["id"]) == str(comments[0].id)
+    assert str(newest.data["results"][0]["id"]) == str(comments[1].id)
