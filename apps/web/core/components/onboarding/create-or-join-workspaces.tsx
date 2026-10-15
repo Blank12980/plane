@@ -9,6 +9,7 @@ import { observer } from "mobx-react";
 import { OctagonAlert } from "lucide-react";
 // gizmo imports
 import type { IWorkspaceMemberInvitation, TOnboardingSteps } from "@plane/types";
+import { Button } from "@plane/propel/button";
 // components
 import { LogoSpinner } from "@/components/common/logo-spinner";
 // hooks
@@ -90,6 +91,9 @@ export const CreateOrJoinWorkspaces = observer(function CreateOrJoinWorkspaces(p
               <LogoSpinner />
             </div>
           )}
+          <Button variant="ghost" onClick={handleNextStep}>
+            Продолжить без рабочего пространства
+          </Button>
         </div>
       </div>
       <SwitchAccountDropdown />

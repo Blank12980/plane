@@ -5,6 +5,7 @@
  */
 
 import { observer } from "mobx-react";
+import { useState } from "react";
 import Link from "next/link";
 import { Controller, useForm } from "react-hook-form";
 
@@ -23,6 +24,8 @@ import { getFileURL } from "@plane/utils";
 // hooks
 import { useMember } from "@/hooks/store/use-member";
 import { useUser, useUserPermissions } from "@/hooks/store/user";
+import { Button } from "@plane/propel/button";
+import { ClientAccessModal } from "./client-access-modal";
 
 export interface RowData {
   member: IWorkspaceMember;
@@ -118,6 +121,7 @@ export function NameColumn(props: NameProps) {
 }
 
 export const AccountTypeColumn = observer(function AccountTypeColumn(props: AccountTypeProps) {
+  const [isAccessOpen, setAccessOpen] = useState(false);
   const { rowData, workspaceSlug } = props;
   const { t } = useTranslation();
   // form info
@@ -141,6 +145,20 @@ export const AccountTypeColumn = observer(function AccountTypeColumn(props: Acco
 
   return (
     <>
+      {rowData.role === EUserPermissions.CLIENT && isAdminRole && !isSuspended && (
+        <>
+          <ClientAccessModal
+            isOpen={isAccessOpen}
+            onClose={() => setAccessOpen(false)}
+            workspaceSlug={workspaceSlug}
+            clientId={rowData.member.id}
+            clientName={rowData.member.display_name || rowData.member.email || "Клиент"}
+          />
+          <Button variant="ghost" title="Доступ к задачам и страницам" onClick={() => setAccessOpen(true)}>
+            Доступ
+          </Button>
+        </>
+      )}
       {isSuspended ? (
         <div className="flex w-32">
           <Pill variant={EPillVariant.DEFAULT} size={EPillSize.SM} className="border-none">

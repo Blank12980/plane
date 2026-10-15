@@ -5,6 +5,7 @@
 # Third Party imports
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework import serializers
 from django.db.models import Min, Q
 from django.db import transaction
 
@@ -32,7 +33,7 @@ from plane.db.models import (
 from plane.license.workspace_access import promote_explicit_workspace_membership
 from plane.bgtasks.project_add_user_email_task import project_add_user_email
 from plane.utils.host import base_host
-from plane.utils.project_access import is_workspace_admin, projects_for_user
+from plane.utils.project_access import is_workspace_admin, is_workspace_client, projects_for_user
 from plane.app.permissions.base import allow_permission, ROLE
 
 
@@ -66,6 +67,11 @@ class ProjectMemberViewSet(BaseViewSet):
     def create(self, request, slug, project_id):
         # Get the list of members to be added to the project and their roles i.e. the user_id and the role
         members = request.data.get("members", [])
+        for member in members:
+            member["member_id"] = str(serializers.UUIDField().run_validation(member.get("member_id")))
+            member["role"] = serializers.ChoiceField(choices=[(role.value, role.name) for role in ROLE]).run_validation(
+                member.get("role", ROLE.GUEST.value)
+            )
 
         # get the project
         project = Project.objects.get(pk=project_id, workspace__slug=slug)
@@ -89,6 +95,15 @@ class ProjectMemberViewSet(BaseViewSet):
             workspace_member_role = WorkspaceMember.objects.get(
                 workspace__slug=slug, member=member, is_active=True
             ).role
+            if workspace_member_role == ROLE.CLIENT.value:
+                return Response(
+                    {"error": "Use client access settings to share individual work items and pages"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            elif member_roles[member] == ROLE.CLIENT.value:
+                return Response(
+                    {"error": "Assign the Client role in the workspace first"}, status=status.HTTP_400_BAD_REQUEST
+                )
             if workspace_member_role in [20] and member_roles.get(member) in [5, 15]:
                 return Response(
                     {"error": "You cannot add a user with role lower than the workspace role"},
@@ -241,6 +256,11 @@ class ProjectMemberViewSet(BaseViewSet):
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def partial_update(self, request, slug, project_id, pk):
+        payload = request.data.copy()
+        if "role" in payload:
+            payload["role"] = serializers.ChoiceField(
+                choices=[(role.value, role.name) for role in ROLE]
+            ).run_validation(payload["role"])
         project_member = ProjectMember.objects.get(pk=pk, workspace__slug=slug, project_id=project_id, is_active=True)
         if project_member.is_instance_admin_access:
             return Response(
@@ -252,6 +272,14 @@ class ProjectMemberViewSet(BaseViewSet):
         workspace_role = WorkspaceMember.objects.get(
             workspace__slug=slug, member=project_member.member, is_active=True
         ).role
+        if workspace_role == ROLE.CLIENT.value and payload.get("role", project_member.role) != ROLE.CLIENT.value:
+            return Response(
+                {"error": "Clients must keep their workspace role in projects"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if workspace_role != ROLE.CLIENT.value and payload.get("role") == ROLE.CLIENT.value:
+            return Response(
+                {"error": "Assign the Client role in the workspace first"}, status=status.HTTP_400_BAD_REQUEST
+            )
         is_target_workspace_admin = workspace_role == ROLE.ADMIN.value
 
         # Check if the user is not editing their own role if they are not an admin
@@ -270,8 +298,8 @@ class ProjectMemberViewSet(BaseViewSet):
             )
 
         if (
-            "role" in request.data
-            and int(request.data.get("role", project_member.role)) > requested_project_member.role
+            "role" in payload
+            and int(payload.get("role", project_member.role)) > requested_project_member.role
             and not is_target_workspace_admin
         ):
             return Response(
@@ -279,7 +307,7 @@ class ProjectMemberViewSet(BaseViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        serializer = ProjectMemberSerializer(project_member, data=request.data, partial=True)
+        serializer = ProjectMemberSerializer(project_member, data=payload, partial=True)
 
         if serializer.is_valid():
             serializer.save()
@@ -408,6 +436,7 @@ class ProjectMemberUserEndpoint(BaseAPIView):
 
 
 class UserProjectRolesEndpoint(BaseAPIView):
+    client_workspace_read = True
     permission_classes = [WorkspaceUserPermission]
     use_read_replica = True
 
@@ -423,6 +452,8 @@ class UserProjectRolesEndpoint(BaseAPIView):
         ).values("project_id", "role")
 
         project_members = {str(member["project_id"]): member["role"] for member in project_members}
+        if is_workspace_client(request.user, slug):
+            project_members = {project_id: ROLE.CLIENT.value for project_id in project_members}
         if is_workspace_admin(request.user, slug):
             project_members = {
                 str(pk): ROLE.ADMIN.value for pk in projects_for_user(request.user, slug).values_list("pk", flat=True)
@@ -431,6 +462,8 @@ class UserProjectRolesEndpoint(BaseAPIView):
 
 
 class ProjectMemberPreferenceEndpoint(BaseAPIView):
+    client_self_service_methods = ("PATCH",)
+
     def get_queryset(self, slug, project_id, member_id):
         return ProjectMember.objects.get(
             project_id=project_id,
@@ -438,7 +471,7 @@ class ProjectMemberPreferenceEndpoint(BaseAPIView):
             workspace__slug=slug,
         )
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST, ROLE.CLIENT])
     def patch(self, request, slug, project_id, member_id):
         project_member = self.get_queryset(slug, project_id, member_id)
 

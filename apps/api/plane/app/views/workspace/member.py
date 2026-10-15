@@ -4,6 +4,7 @@
 
 # Django imports
 from django.db.models import Count, Q, OuterRef, Subquery, IntegerField
+from django.db import transaction
 from django.utils import timezone
 from django.db.models.functions import Coalesce
 
@@ -21,9 +22,9 @@ from plane.app.serializers import (
     WorkSpaceMemberSerializer,
 )
 from plane.app.views.base import BaseAPIView
-from plane.db.models import Project, ProjectMember, WorkspaceMember, DraftIssue
+from plane.db.models import ClientAccessGrant, Project, ProjectMember, WorkspaceMember, DraftIssue
 from plane.utils.cache import invalidate_cache
-from plane.utils.project_access import projects_for_user
+from plane.utils.project_access import is_workspace_client, projects_for_user
 
 from .. import BaseViewSet
 
@@ -36,7 +37,7 @@ class WorkSpaceMemberViewSet(BaseViewSet):
     use_read_replica = True
 
     def get_queryset(self):
-        return self.filter_queryset(
+        members = self.filter_queryset(
             super()
             .get_queryset()
             .filter(
@@ -46,6 +47,14 @@ class WorkSpaceMemberViewSet(BaseViewSet):
             )
             .select_related("member", "member__avatar_asset")
         )
+        if is_workspace_client(self.request.user, self.kwargs.get("slug")):
+            project_members = ProjectMember.objects.filter(
+                project_id__in=projects_for_user(self.request.user, self.kwargs.get("slug")).values("pk"),
+                is_active=True,
+                is_instance_admin_access=False,
+            ).values("member_id")
+            members = members.filter(Q(member=self.request.user) | Q(member_id__in=project_members))
+        return members
 
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
     def list(self, request, slug):
@@ -79,8 +88,9 @@ class WorkSpaceMemberViewSet(BaseViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @allow_permission(allowed_roles=[ROLE.ADMIN], level="WORKSPACE")
+    @transaction.atomic
     def partial_update(self, request, slug, pk):
-        workspace_member = WorkspaceMember.objects.get(
+        workspace_member = WorkspaceMember.objects.select_for_update().get(
             pk=pk, workspace__slug=slug, member__is_bot=False, is_active=True
         )
         if workspace_member.is_instance_admin_access:
@@ -94,13 +104,24 @@ class WorkSpaceMemberViewSet(BaseViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # If a user is moved to a guest role he can't have any other role in projects
-        if "role" in request.data and int(request.data.get("role")) == 5:
-            ProjectMember.objects.filter(workspace__slug=slug, member_id=workspace_member.member_id).update(role=5)
-
         serializer = WorkSpaceMemberSerializer(workspace_member, data=request.data, partial=True)
 
         if serializer.is_valid():
+            role = serializer.validated_data.get("role", workspace_member.role)
+            if role != workspace_member.role and ROLE.CLIENT.value in (role, workspace_member.role):
+                ClientAccessGrant.objects.filter(workspace__slug=slug, client_id=workspace_member.member_id).delete()
+            if role == ROLE.CLIENT.value and workspace_member.role != role:
+                # Existing membership may have been self-created. The admin
+                # must grant individual resources after assigning Client.
+                ProjectMember.objects.filter(
+                    workspace__slug=slug,
+                    member_id=workspace_member.member_id,
+                    is_instance_admin_access=False,
+                ).update(is_active=False, role=ROLE.CLIENT.value)
+            elif role == ROLE.GUEST.value:
+                ProjectMember.objects.filter(workspace__slug=slug, member_id=workspace_member.member_id).update(
+                    role=role
+                )
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -232,6 +253,9 @@ class WorkSpaceMemberViewSet(BaseViewSet):
 
 
 class WorkspaceMemberUserViewsEndpoint(BaseAPIView):
+    client_workspace_read = True
+    client_self_service_methods = ("POST",)
+
     def post(self, request, slug):
         workspace_member = WorkspaceMember.objects.get(workspace__slug=slug, member=request.user, is_active=True)
         workspace_member.view_props = request.data.get("view_props", {})
@@ -241,6 +265,7 @@ class WorkspaceMemberUserViewsEndpoint(BaseAPIView):
 
 
 class WorkspaceMemberUserEndpoint(BaseAPIView):
+    client_workspace_read = True
     use_read_replica = True
 
     def get(self, request, slug):
@@ -261,6 +286,7 @@ class WorkspaceMemberUserEndpoint(BaseAPIView):
 
 
 class WorkspaceProjectMemberEndpoint(BaseAPIView):
+    client_workspace_read = True
     serializer_class = ProjectMemberRoleSerializer
     model = ProjectMember
 

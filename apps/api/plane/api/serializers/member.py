@@ -33,9 +33,22 @@ class ProjectMemberSerializer(BaseSerializer):
         return value
 
     def validate_role(self, value):
-        if value not in [ROLE.ADMIN.value, ROLE.MEMBER.value, ROLE.GUEST.value]:
+        if value not in [role.value for role in ROLE]:
             raise serializers.ValidationError("Invalid role", code="INVALID_ROLE")
         return value
+
+    def validate(self, attrs):
+        member = attrs.get("member", self.instance.member if self.instance else None)
+        workspace_member = WorkspaceMember.objects.filter(
+            workspace__slug=self.context.get("slug"),
+            member=member,
+            is_active=True,
+        ).first()
+        if workspace_member and workspace_member.role == ROLE.CLIENT.value:
+            raise serializers.ValidationError("Use client access settings to share individual work items and pages")
+        elif attrs.get("role") == ROLE.CLIENT.value:
+            raise serializers.ValidationError("Assign the Client role in the workspace first")
+        return attrs
 
     class Meta:
         model = ProjectMember

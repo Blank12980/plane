@@ -4,10 +4,10 @@
  * See the LICENSE file for details.
  */
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { observer } from "mobx-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import useSWR from "swr";
 // ui
 import { LogOut } from "lucide-react";
@@ -40,6 +40,8 @@ import { useProjectState } from "@/hooks/store/use-project-state";
 import { useWorkspace } from "@/hooks/store/use-workspace";
 import { useUser, useUserPermissions } from "@/hooks/store/user";
 import { usePlatformOS } from "@/hooks/use-platform-os";
+import { useAppRouter } from "@/hooks/use-app-router";
+import { canClientAccessWorkspacePath } from "@/helpers/client-access";
 
 interface IWorkspaceAuthWrapper {
   children: ReactNode;
@@ -50,6 +52,8 @@ export const WorkspaceAuthWrapper = observer(function WorkspaceAuthWrapper(props
   const { children, isLoading: isParentLoading = false } = props;
   // router params
   const { workspaceSlug } = useParams();
+  const pathname = usePathname();
+  const router = useAppRouter();
   // store hooks
   const { signOut, data: currentUser } = useUser();
   const { fetchPartialProjects } = useProject();
@@ -71,6 +75,12 @@ export const WorkspaceAuthWrapper = observer(function WorkspaceAuthWrapper(props
   const currentWorkspace =
     (allWorkspaces && allWorkspaces.find((workspace) => workspace?.slug === workspaceSlug)) || undefined;
   const currentWorkspaceInfo = workspaceSlug && workspaceInfoBySlug(workspaceSlug.toString());
+  const isClient =
+    !currentUser?.is_instance_admin && !!currentWorkspaceInfo && currentWorkspaceInfo.role === EUserPermissions.CLIENT;
+  const redirectClient = isClient && !canClientAccessWorkspacePath(pathname, workspaceSlug.toString());
+  useEffect(() => {
+    if (redirectClient) router.replace(`/${workspaceSlug}/client`);
+  }, [redirectClient, router, workspaceSlug]);
 
   // fetching user workspace information
   useSWR(
@@ -211,8 +221,8 @@ export const WorkspaceAuthWrapper = observer(function WorkspaceAuthWrapper(props
             <div className="space-y-2">
               <h3 className="text-16 font-semibold">Нет доступа</h3>
               <p className="mx-auto w-1/2 text-13 text-secondary">
-                Вы не участник этого рабочего пространства. Попросите администратора отправить приглашение или
-                проверьте входящие приглашения.
+                Вы не участник этого рабочего пространства. Попросите администратора отправить приглашение или проверьте
+                входящие приглашения.
               </p>
             </div>
             <div className="flex items-center justify-center gap-2">
@@ -233,5 +243,6 @@ export const WorkspaceAuthWrapper = observer(function WorkspaceAuthWrapper(props
     );
   }
 
+  if (redirectClient) return <LogoSpinner />;
   return <>{children}</>;
 });

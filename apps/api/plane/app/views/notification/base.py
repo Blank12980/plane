@@ -24,9 +24,19 @@ from plane.db.models import (
 )
 from plane.utils.paginator import BasePaginator
 from plane.app.permissions import allow_permission, ROLE
+from plane.utils.project_access import projects_for_user
 
 # Module imports
 from ..base import BaseAPIView, BaseViewSet
+
+
+def visible_notifications(user, slug):
+    return Notification.objects.filter(
+        workspace__slug=slug,
+        receiver_id=user.id,
+        entity_name__in=["issue", "module"],
+        project_id__in=projects_for_user(user, slug).values("pk"),
+    )
 
 
 class NotificationViewSet(BaseViewSet, BasePaginator):
@@ -61,8 +71,7 @@ class NotificationViewSet(BaseViewSet, BasePaginator):
         )
 
         notifications = (
-            Notification.objects.filter(workspace__slug=slug, receiver_id=request.user.id)
-            .filter(entity_name="issue")
+            visible_notifications(request.user, slug)
             .annotate(is_inbox_issue=Exists(intake_issue))
             .annotate(is_intake_issue=Exists(intake_issue))
             .annotate(
@@ -78,8 +87,8 @@ class NotificationViewSet(BaseViewSet, BasePaginator):
 
         # Filters based on query parameters
         snoozed_filters = {
-            "true": Q(snoozed_till__lt=timezone.now()) | Q(snoozed_till__isnull=False),
-            "false": Q(snoozed_till__gte=timezone.now()) | Q(snoozed_till__isnull=True),
+            "true": Q(snoozed_till__gt=timezone.now()),
+            "false": Q(snoozed_till__lte=timezone.now()) | Q(snoozed_till__isnull=True),
         }
 
         notifications = notifications.filter(snoozed_filters[snoozed])
@@ -198,32 +207,38 @@ class UnreadNotificationEndpoint(BaseAPIView):
 
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
     def get(self, request, slug):
-        # Watching Issues Count
-        unread_notifications_count = (
-            Notification.objects.filter(
-                workspace__slug=slug,
-                receiver_id=request.user.id,
-                read_at__isnull=True,
-                archived_at__isnull=True,
-                snoozed_till__isnull=True,
-            )
-            .exclude(sender__icontains="mentioned")
-            .count()
-        )
-
-        mention_notifications_count = Notification.objects.filter(
-            workspace__slug=slug,
-            receiver_id=request.user.id,
+        unread = visible_notifications(request.user, slug).filter(
+            Q(snoozed_till__isnull=True) | Q(snoozed_till__lte=timezone.now()),
             read_at__isnull=True,
             archived_at__isnull=True,
-            snoozed_till__isnull=True,
-            sender__icontains="mentioned",
-        ).count()
+        )
+        # Watching Issues Count
+        unread_notifications_count = unread.exclude(sender__icontains="mentioned").count()
+
+        mention_notifications_count = unread.filter(sender__icontains="mentioned").count()
+        recent = (
+            unread.select_related("triggered_by")
+            .annotate(
+                is_mentioned_notification=Case(
+                    When(sender__icontains="mentioned", then=True),
+                    default=False,
+                    output_field=BooleanField(),
+                ),
+                is_inbox_issue=Exists(
+                    Issue.objects.filter(
+                        pk=OuterRef("entity_identifier"),
+                        issue_intake__status__in=[0, 2, -2],
+                    )
+                ),
+            )
+            .order_by("-created_at", "-id")[:20]
+        )
 
         return Response(
             {
                 "total_unread_notifications_count": int(unread_notifications_count),
                 "mention_unread_notifications_count": int(mention_notifications_count),
+                "recent_notifications": NotificationSerializer(recent, many=True).data,
             },
             status=status.HTTP_200_OK,
         )

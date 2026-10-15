@@ -464,7 +464,7 @@ class IssueComment(ChangeTrackerMixin, ProjectBaseModel):
     external_id = models.CharField(max_length=255, blank=True, null=True)
     edited_at = models.DateTimeField(null=True, blank=True)
     parent = models.ForeignKey(
-        "self", on_delete=models.CASCADE, null=True, blank=True, related_name="parent_issue_comment"
+        "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="parent_issue_comment"
     )
 
     TRACKED_FIELDS = ["comment_stripped", "comment_json", "comment_html"]

@@ -73,8 +73,8 @@ class IssueCommentViewSet(BaseViewSet):
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def create(self, request, slug, project_id, issue_id):
-        project = Project.objects.get(pk=project_id)
-        issue = Issue.objects.get(pk=issue_id)
+        project = Project.objects.get(pk=project_id, workspace__slug=slug)
+        issue = Issue.objects.get(pk=issue_id, project_id=project_id, workspace__slug=slug)
         if (
             ProjectMember.objects.filter(
                 workspace__slug=slug,
@@ -90,7 +90,7 @@ class IssueCommentViewSet(BaseViewSet):
                 {"error": "You are not allowed to comment on the issue"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        serializer = IssueCommentSerializer(data=request.data)
+        serializer = IssueCommentSerializer(data=request.data, context={"issue_id": issue_id})
         if serializer.is_valid():
             serializer.save(project_id=project_id, issue_id=issue_id, actor=request.user)
             issue_activity.delay(
@@ -156,6 +156,8 @@ class IssueCommentViewSet(BaseViewSet):
     def destroy(self, request, slug, project_id, issue_id, pk):
         issue_comment = IssueComment.objects.get(workspace__slug=slug, project_id=project_id, issue_id=issue_id, pk=pk)
         current_instance = json.dumps(IssueCommentSerializer(issue_comment).data, cls=DjangoJSONEncoder)
+        # Preserve other users' replies when the root is removed, including during soft deletion.
+        IssueComment.objects.filter(parent=issue_comment).update(parent=None)
         issue_comment.delete()
         issue_activity.delay(
             type="comment.activity.deleted",

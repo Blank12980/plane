@@ -23,6 +23,15 @@ export abstract class PageCoreService extends APIService {
     super();
   }
 
+  async fetchCollaborationAccess(pageId: string): Promise<{ read_only: boolean }> {
+    const response = await this.get(`${this.basePath}/pages/${pageId}/collaboration-access/`, {
+      headers: this.getHeader(),
+    });
+    const readOnly: unknown = response.data?.read_only;
+    if (typeof readOnly !== "boolean") throw new AppError("Invalid collaboration permission response");
+    return { read_only: readOnly };
+  }
+
   async fetchDetails(pageId: string): Promise<TPage> {
     try {
       const response = await this.get(`${this.basePath}/pages/${pageId}/`, {

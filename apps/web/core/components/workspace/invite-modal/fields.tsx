@@ -8,7 +8,7 @@ import { observer } from "mobx-react";
 import type { Control, FieldArrayWithId, FormState } from "react-hook-form";
 import { Controller } from "react-hook-form";
 // gizmo imports
-import { ROLE } from "@plane/constants";
+import { ROLE, EUserPermissions } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
 import { CloseIcon } from "@plane/propel/icons";
 import { CustomSelect, Input } from "@plane/ui";
@@ -97,6 +97,8 @@ export const InvitationFields = observer(function InvitationFields(props: TInvit
                     input
                   >
                     {Object.entries(ROLE).map(([key, value]) => {
+                      if (parseInt(key) === EUserPermissions.CLIENT && currentWorkspaceRole !== EUserPermissions.ADMIN)
+                        return null;
                       if (currentWorkspaceRole && currentWorkspaceRole >= parseInt(key))
                         return (
                           <CustomSelect.Option key={key} value={parseInt(key)}>

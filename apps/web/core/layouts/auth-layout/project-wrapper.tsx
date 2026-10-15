@@ -66,7 +66,7 @@ export const ProjectAuthWrapper = observer(function ProjectAuthWrapper(props: IP
   const { getProjectEstimates } = useProjectEstimates();
   // derived values
   const hasPermissionToCurrentProject = allowPermissions(
-    [EUserPermissions.ADMIN, EUserPermissions.MEMBER, EUserPermissions.GUEST],
+    [EUserPermissions.ADMIN, EUserPermissions.MEMBER, EUserPermissions.GUEST, EUserPermissions.CLIENT],
     EUserPermissionsLevel.PROJECT,
     workspaceSlug,
     projectId

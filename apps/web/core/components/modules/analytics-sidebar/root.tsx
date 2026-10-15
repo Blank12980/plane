@@ -36,6 +36,7 @@ import { CreateUpdateModuleLinkModal, ModuleAnalyticsProgress, ModuleLinksList }
 import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useModule } from "@/hooks/store/use-module";
 import { useUserPermissions } from "@/hooks/store/user";
+import { ModuleTimeBudget } from "./time-budget";
 // gizmo web constants
 const defaultValues: Partial<IModule> = {
   lead_id: "",
@@ -243,6 +244,15 @@ export const ModuleAnalyticsSidebar = observer(function ModuleAnalyticsSidebar(p
           />
         )}
 
+        {isEditingAllowed && workspaceSlug && projectId && (
+          <ModuleTimeBudget
+            key={moduleId}
+            workspaceSlug={workspaceSlug.toString()}
+            projectId={projectId.toString()}
+            moduleId={moduleId}
+            disabled={isArchived}
+          />
+        )}
         <div className="flex flex-col gap-5 pt-2.5 pb-6">
           <div className="flex items-center justify-start gap-1">
             <div className="flex w-2/5 items-center justify-start gap-2 text-tertiary">

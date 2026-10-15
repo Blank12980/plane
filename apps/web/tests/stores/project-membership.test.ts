@@ -44,6 +44,16 @@ function createStore() {
   return { store, projectMap, user };
 }
 
+test("a workspace client cannot inherit an old project administrator role", () => {
+  const { store } = createStore();
+  store.workspaceUserInfo = {
+    workspace: { role: EUserPermissions.CLIENT },
+  } as unknown as typeof store.workspaceUserInfo;
+  store.workspaceProjectsPermissions = { workspace: { project: EUserPermissions.ADMIN } };
+  expect(store.getProjectRoleByWorkspaceSlugAndProjectId("workspace", "project")).toBe(EUserPermissions.CLIENT);
+  expect(store.getProjectRoleByWorkspaceSlugAndProjectId("workspace", "unshared")).toBeUndefined();
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   leaveRequest.mockResolvedValue(undefined);

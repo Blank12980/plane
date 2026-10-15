@@ -67,7 +67,10 @@ export function WorkspaceJoinInvitesStep(props: Props) {
 
   return invitations && invitations.length > 0 ? (
     <div className="flex flex-col gap-10">
-      <CommonOnboardingHeader title="Примите приглашения или создайте рабочее пространство" description="Вся ваша работа — в одном месте." />
+      <CommonOnboardingHeader
+        title="Примите приглашения или создайте рабочее пространство"
+        description="Вся ваша работа — в одном месте."
+      />
       <div className="flex flex-col gap-3">
         {invitations &&
           invitations.length > 0 &&
@@ -116,6 +119,9 @@ export function WorkspaceJoinInvitesStep(props: Props) {
           disabled={isJoiningWorkspaces}
         >
           Создать новое рабочее пространство
+        </Button>
+        <Button variant="ghost" size="xl" onClick={handleNextStep} disabled={isJoiningWorkspaces}>
+          Продолжить без рабочего пространства
         </Button>
       </div>
     </div>

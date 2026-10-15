@@ -36,7 +36,7 @@ export const MemberSelect = observer(function MemberSelect(props: Props) {
       const memberDetails = projectId ? getProjectMemberDetails(userId, projectId.toString()) : null;
 
       if (!memberDetails?.member) return;
-      const isGuest = memberDetails.role === EUserProjectRoles.GUEST;
+      const isGuest = memberDetails.role === EUserProjectRoles.GUEST || memberDetails.role === EUserProjectRoles.CLIENT;
       if (isGuest) return;
 
       return {

@@ -23,10 +23,12 @@ import { truncateText } from "@plane/utils";
 import emptyInvitation from "@/app/assets/empty-state/invitation.svg?url";
 // components
 import { EmptyState } from "@/components/common/empty-state";
+import { LogoSpinner } from "@/components/common/logo-spinner";
 import { WorkspaceLogo } from "@/components/workspace/logo";
 import { USER_WORKSPACES_LIST } from "@/constants/fetch-keys";
 // hooks
 import { useWorkspace } from "@/hooks/store/use-workspace";
+import { useInstance } from "@/hooks/store/use-instance";
 import { useUser, useUserProfile } from "@/hooks/store/user";
 import { useAppRouter } from "@/hooks/use-app-router";
 // services
@@ -44,17 +46,21 @@ function UserInvitationsPage() {
   const router = useAppRouter();
   // store hooks
   const { t } = useTranslation();
-  const { data: currentUser } = useUser();
+  const { data: currentUser, signOut } = useUser();
   const { updateUserProfile } = useUserProfile();
 
-  const { fetchWorkspaces } = useWorkspace();
+  const { fetchWorkspaces, workspaces, getWorkspaceRedirectionUrl } = useWorkspace();
+  const { config } = useInstance();
 
-  const { data: invitations } = useSWR("USER_WORKSPACE_INVITATIONS", () => workspaceService.userWorkspaceInvitations());
+  const {
+    data: invitationsData,
+    error: invitationsError,
+    mutate: refreshInvitations,
+  } = useSWR("USER_WORKSPACE_INVITATIONS", () => workspaceService.userWorkspaceInvitations());
+  const invitations = invitationsData ?? (invitationsError ? [] : undefined);
 
-  const redirectWorkspaceSlug =
-    // currentUserSettings?.workspace?.last_workspace_slug ||
-    // currentUserSettings?.workspace?.fallback_workspace_slug ||
-    "";
+  const homeUrl = getWorkspaceRedirectionUrl();
+  const hasWorkspaces = Object.keys(workspaces ?? {}).length > 0;
 
   const handleInvitation = (workspace_invitation: IWorkspaceMemberInvitation, action: "accepted" | "withdraw") => {
     if (action === "accepted") {
@@ -119,8 +125,19 @@ function UserInvitationsPage() {
           >
             <PlaneLogo className="h-9 w-auto text-primary" />
           </Link>
-          <div className="absolute top-1/4 right-4 -translate-y-1/2 text-13 text-primary sm:fixed sm:top-12 sm:right-16 sm:translate-y-0 sm:py-5">
+          <div className="absolute top-1/4 right-4 flex -translate-y-1/2 items-center gap-3 text-13 text-primary sm:fixed sm:top-12 sm:right-16 sm:translate-y-0 sm:py-5">
             {currentUser?.email}
+            <Button
+              variant="ghost"
+              onClick={() => {
+                void signOut().catch((error: unknown) => {
+                  console.error("Sign out failed", error);
+                  setToast({ type: TOAST_TYPE.ERROR, title: "Не удалось выйти", message: "Попробуйте ещё раз." });
+                });
+              }}
+            >
+              Выйти
+            </Button>
           </div>
         </div>
         {invitations ? (
@@ -170,30 +187,46 @@ function UserInvitationsPage() {
                   >
                     {t("accept_and_join")}
                   </Button>
-                  <Link href={`/${redirectWorkspaceSlug}`}>
-                    <span>
-                      <Button variant="secondary" size="lg">
-                        {t("go_home")}
-                      </Button>
-                    </span>
-                  </Link>
+                  {hasWorkspaces && (
+                    <Link href={homeUrl}>
+                      <span>
+                        <Button variant="secondary" size="lg">
+                          {t("go_home")}
+                        </Button>
+                      </span>
+                    </Link>
+                  )}
                 </div>
               </div>
             </div>
           ) : (
-            <div className="fixed top-0 left-0 grid h-full w-full place-items-center">
+            <div className="flex h-full flex-1 flex-col items-center justify-center gap-6 px-6">
               <EmptyState
-                title={t("no_pending_invites")}
-                description={t("you_can_see_here_if_someone_invites_you_to_a_workspace")}
+                title={invitationsError ? "Не удалось загрузить приглашения" : t("no_pending_invites")}
+                description={
+                  invitationsError
+                    ? "Попробуйте обновить список приглашений."
+                    : t("you_can_see_here_if_someone_invites_you_to_a_workspace")
+                }
                 image={emptyInvitation}
                 primaryButton={{
-                  text: t("back_to_home"),
-                  onClick: () => router.push("/"),
+                  text: hasWorkspaces && !invitationsError ? t("back_to_home") : "Проверить приглашения",
+                  onClick: () => {
+                    if (hasWorkspaces && !invitationsError) router.push(homeUrl);
+                    else void refreshInvitations();
+                  },
                 }}
               />
+              {!config?.is_workspace_creation_disabled && (
+                <Link href="/create-workspace">Создать рабочее пространство</Link>
+              )}
             </div>
           )
-        ) : null}
+        ) : (
+          <div className="flex flex-1 items-center justify-center">
+            <LogoSpinner />
+          </div>
+        )}
       </div>
     </AuthenticationWrapper>
   );

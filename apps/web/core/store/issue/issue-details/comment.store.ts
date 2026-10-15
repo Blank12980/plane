@@ -208,6 +208,9 @@ export class IssueCommentStore implements IIssueCommentStore {
 
     runInAction(() => {
       pull(this.comments[issueId], commentId);
+      Object.values(this.commentMap).forEach((comment) => {
+        if (comment.parent === commentId) comment.parent = null;
+      });
       delete this.commentMap[commentId];
     });
 

@@ -48,7 +48,7 @@ from plane.utils.paginator import BasePaginator
 from plane.authentication.utils.host import user_ip
 from plane.bgtasks.user_deactivation_email_task import user_deactivation_email
 from plane.utils.host import base_host
-from plane.utils.project_access import is_instance_admin
+from plane.utils.project_access import is_instance_admin, projects_for_user
 from plane.bgtasks.user_email_update_task import send_email_update_magic_code, send_email_update_confirmation
 from plane.authentication.rate_limit import EmailVerificationThrottle
 
@@ -381,9 +381,9 @@ class UpdateUserTourCompletedEndpoint(BaseAPIView):
 
 class UserActivityEndpoint(BaseAPIView, BasePaginator):
     def get(self, request):
-        queryset = IssueActivity.objects.filter(actor=request.user).select_related(
-            "actor", "workspace", "issue", "project"
-        )
+        queryset = IssueActivity.objects.filter(
+            actor=request.user, project_id__in=projects_for_user(request.user).values("pk")
+        ).select_related("actor", "workspace", "issue", "project")
 
         return self.paginate(
             order_by=request.GET.get("order_by", "-created_at"),

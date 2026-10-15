@@ -111,3 +111,5 @@ from .device import Device, DeviceSession
 from .sticky import Sticky
 
 from .description import Description, DescriptionVersion
+from .client_access import ClientAccessGrant
+from .module_time_budget import ModuleTimeBudget, ModuleTimeBudgetAlert

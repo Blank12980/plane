@@ -8,7 +8,8 @@ import { observer } from "mobx-react";
 // gizmo imports
 import type { E_SORT_ORDER, TActivityFilters, EActivityFilterType } from "@plane/constants";
 import { BASE_ACTIVITY_FILTER_TYPES, filterActivityOnSelectedFilters } from "@plane/constants";
-import type { TCommentsOperations } from "@plane/types";
+import type { TCommentsOperations, TIssueComment } from "@plane/types";
+import { groupCommentReplies } from "@/helpers/comment-threads";
 // components
 import { CommentCard } from "@/components/comments/card/root";
 // hooks
@@ -57,11 +58,18 @@ export const IssueActivityCommentRoot = observer(function IssueActivityCommentRo
   if (activityAndComments.length <= 0) return null;
 
   const filteredActivityAndComments = filterActivityOnSelectedFilters(activityAndComments, selectedFilters);
+  const comments = filteredActivityAndComments
+    .filter((item) => item.activity_type === "COMMENT")
+    .map((item) => getCommentById(item.id))
+    .filter((comment): comment is TIssueComment => !!comment);
+  const { roots, replies } = groupCommentReplies(comments);
+  const rootIds = new Set(roots.map((comment) => comment.id));
 
   return (
     <div>
       {filteredActivityAndComments.map((activityComment, index) => {
         const comment = getCommentById(activityComment.id);
+        if (activityComment.activity_type === "COMMENT" && !rootIds.has(activityComment.id)) return null;
         return activityComment.activity_type === "COMMENT" ? (
           <CommentCard
             key={activityComment.id}
@@ -75,6 +83,8 @@ export const IssueActivityCommentRoot = observer(function IssueActivityCommentRo
             disabled={disabled}
             projectId={projectId}
             enableReplies
+            replies={replies[activityComment.id]}
+            repliesByParent={replies}
           />
         ) : BASE_ACTIVITY_FILTER_TYPES.includes(activityComment.activity_type as EActivityFilterType) ? (
           <IssueActivityItem

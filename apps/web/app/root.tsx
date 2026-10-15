@@ -34,7 +34,7 @@ export const links: LinksFunction = () => [
   { rel: "icon", type: "image/svg+xml", href: "/gizmo-mark.svg" },
   { rel: "shortcut icon", type: "image/svg+xml", href: "/gizmo-mark.svg" },
   { rel: "manifest", href: "/site.webmanifest.json" },
-  { rel: "apple-touch-icon", href: "/gizmo-mark.svg" },
+  { rel: "apple-touch-icon", sizes: "180x180", href: "/favicon/apple-touch-icon.png" },
   { rel: "stylesheet", href: globalStyles },
   {
     rel: "preload",

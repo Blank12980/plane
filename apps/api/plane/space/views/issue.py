@@ -263,7 +263,7 @@ class IssueCommentPublicViewSet(BaseViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        serializer = IssueCommentSerializer(data=request.data)
+        serializer = IssueCommentSerializer(data=request.data, context={"issue_id": issue_id})
         if serializer.is_valid():
             serializer.save(
                 project_id=project_deploy_board.project_id,

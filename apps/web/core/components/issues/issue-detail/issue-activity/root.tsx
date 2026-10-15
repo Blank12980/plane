@@ -44,7 +44,7 @@ export type TActivityOperations = {
 };
 
 export const IssueActivity = observer(function IssueActivity(props: TIssueActivity) {
-  const { workspaceSlug, projectId, issueId, disabled = false, isIntakeIssue = false } = props;
+  const { workspaceSlug, projectId, issueId, disabled: isDisabled = false, isIntakeIssue = false } = props;
   // i18n
   const { t } = useTranslation();
   // hooks
@@ -64,10 +64,11 @@ export const IssueActivity = observer(function IssueActivity(props: TIssueActivi
   // derived values
   const issue = issueId ? getIssueById(issueId) : undefined;
   const currentUserProjectRole = getProjectRoleByWorkspaceSlugAndProjectId(workspaceSlug, projectId);
+  const disabled = isDisabled || currentUserProjectRole === EUserPermissions.CLIENT;
   const isAdmin = currentUserProjectRole === EUserPermissions.ADMIN;
   const isGuest = currentUserProjectRole === EUserPermissions.GUEST;
   const isAssigned = issue?.assignee_ids && currentUser?.id ? issue?.assignee_ids.includes(currentUser?.id) : false;
-  const isWorklogButtonEnabled = !isIntakeIssue && !isGuest && (isAdmin || isAssigned);
+  const isWorklogButtonEnabled = !disabled && !isIntakeIssue && !isGuest && (isAdmin || isAssigned);
   // toggle filter
   const toggleFilter = (filter: TActivityFilters) => {
     if (!selectedFilters) return;

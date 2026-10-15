@@ -122,6 +122,9 @@ export const WorkspaceCreateStep = observer(function WorkspaceCreateStep({
           рабочих пространств. Попросите владельца или администратора рабочего пространства пригласить вас, а затем
           вернитесь на этот экран, чтобы присоединиться.
         </span>
+        <Button variant="secondary" size="xl" onClick={() => onComplete(true)}>
+          Продолжить без рабочего пространства
+        </Button>
       </div>
     );
   }
@@ -298,6 +301,9 @@ export const WorkspaceCreateStep = observer(function WorkspaceCreateStep({
             Присоединиться к существующему рабочему пространству
           </Button>
         )}
+        <Button variant="ghost" type="button" size="xl" disabled={isSubmitting} onClick={() => onComplete(true)}>
+          Продолжить без рабочего пространства
+        </Button>
       </div>
     </form>
   );

@@ -54,6 +54,7 @@ export type TCommentReaction = {
 };
 export type TIssueComment = {
   id: string;
+  parent?: string | null;
   workspace: string;
   workspace_detail: TIssueActivityWorkspaceDetail;
   project: string;

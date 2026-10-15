@@ -30,6 +30,7 @@ export const coreRoutes: RouteConfigEntry[] = [
   ]),
 
   // Create Workspace
+  layout("./(all)/client/layout.tsx", [route(":workspaceSlug/client", "./(all)/client/page.tsx")]),
   layout("./(all)/create-workspace/layout.tsx", [route("create-workspace", "./(all)/create-workspace/page.tsx")]),
 
   // Onboarding

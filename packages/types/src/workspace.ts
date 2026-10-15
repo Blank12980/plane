@@ -16,6 +16,7 @@ export enum EUserWorkspaceRoles {
   ADMIN = 20,
   MEMBER = 15,
   GUEST = 5,
+  CLIENT = 3,
 }
 
 export interface IWorkspace {

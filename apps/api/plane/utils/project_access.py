@@ -19,10 +19,12 @@ from plane.db.models import (
     Project,
     ProjectMember,
     WorkspaceMember,
+    Workspace,
 )
 from plane.db.models.project import ROLE, ProjectNetwork
 from plane.license.models import InstanceAdmin, INSTANCE_ADMIN_ROLE
 from plane.utils.core import set_use_read_replica
+from plane.utils.client_access import client_grants
 
 
 def is_instance_admin(user):
@@ -70,11 +72,12 @@ def projects_for_user(user, slug=None, *, include_public=False):
     projects = projects.alias(
         _active_workspace_member=Exists(workspace_members),
         _workspace_admin=Exists(workspace_members.filter(role=ROLE.ADMIN.value)),
+        _workspace_client=Exists(workspace_members.filter(role=ROLE.CLIENT.value)),
         _active_project_member=Exists(project_members),
     )
-    access = Q(_workspace_admin=True) | Q(_active_project_member=True)
+    access = Q(_workspace_admin=True) | Q(_active_project_member=True, _workspace_client=False)
     if include_public:
-        access |= Q(network=ProjectNetwork.PUBLIC.value)
+        access |= Q(network=ProjectNetwork.PUBLIC.value, _workspace_client=False)
     return projects.filter(access, _active_workspace_member=True)
 
 
@@ -85,6 +88,25 @@ def require_project_access(user, slug, project_id):
 
 
 def require_asset_access(user, slug, asset, *, discovery=False):
+    asset_slug = slug or (asset.workspace.slug if getattr(asset, "workspace_id", None) else None)
+    if is_workspace_client(user, asset_slug):
+        grants = client_grants(user, asset_slug)
+        allowed = False
+        if getattr(asset, "comment_id", None):
+            allowed = (
+                asset.comment.deleted_at is None
+                and asset.comment.access == "EXTERNAL"
+                and grants.filter(issue_id=asset.comment.issue_id).exists()
+            )
+        elif getattr(asset, "issue_id", None):
+            allowed = grants.filter(issue_id=asset.issue_id).exists()
+        elif getattr(asset, "page_id", None):
+            allowed = grants.filter(page_id=asset.page_id).exists()
+        elif asset.entity_type == FileAsset.EntityTypeContext.WORKSPACE_LOGO:
+            allowed = asset.workspace.slug == asset_slug
+        if not allowed:
+            raise PermissionDenied("This file has not been shared with you.")
+        return
     project_id = asset.project_id
     if project_id is None and asset.issue_id:
         project_id = asset.issue.project_id
@@ -109,6 +131,8 @@ def has_project_role(user, slug, project_id, roles):
         return False
     if is_workspace_admin(user, slug):
         return True
+    if is_workspace_client(user, slug):
+        return ROLE.CLIENT.value in roles
     return ProjectMember.objects.filter(
         workspace__slug=slug,
         project_id=project_id,
@@ -117,6 +141,21 @@ def has_project_role(user, slug, project_id, roles):
         role__in=roles,
         is_instance_admin_access=False,
     ).exists()
+
+
+def is_workspace_client(user, slug):
+    return (
+        bool(slug)
+        and user.is_authenticated
+        and not is_workspace_admin(user, slug)
+        and WorkspaceMember.objects.filter(
+            workspace__slug=slug,
+            member=user,
+            role=ROLE.CLIENT.value,
+            is_active=True,
+            is_instance_admin_access=False,
+        ).exists()
+    )
 
 
 def annotate_project_membership(projects, user, slug):
@@ -174,6 +213,36 @@ class ProjectAccessMixin:
     """
 
     project_invitation_endpoint = False
+    # Workspace endpoints must explicitly opt in after their querysets have
+    # been restricted to the client's projects (or the client's own settings).
+    client_workspace_read = False
+    client_self_service_methods = ()
+
+    def check_client_permissions(self, request, slug, project_id, asset):
+        if not is_workspace_client(request.user, slug):
+            return
+        member_id = self.kwargs.get("member_id")
+        if member_id and str(member_id) != str(request.user.id):
+            raise PermissionDenied("Clients can only access their own preferences.")
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            leaving = getattr(self, "action", None) == "leave"
+            if not leaving and request.method not in self.client_self_service_methods:
+                raise PermissionDenied("Clients have read-only access.")
+        # Client content is served through the explicitly filtered resource
+        # endpoints. Project membership never opens the ordinary project APIs.
+        scoped = False
+        if asset:
+            grants = client_grants(request.user, slug)
+            if asset.issue_id:
+                scoped = grants.filter(issue_id=asset.issue_id).exists()
+            elif asset.page_id:
+                scoped = grants.filter(page_id=asset.page_id).exists()
+            elif asset.comment_id:
+                scoped = asset.comment.access == "EXTERNAL" and grants.filter(issue_id=asset.comment.issue_id).exists()
+            if asset.entity_type == FileAsset.EntityTypeContext.WORKSPACE_LOGO:
+                scoped = asset.workspace.slug == slug
+        if not scoped and not self.client_workspace_read:
+            raise PermissionDenied("Use the client portal to access shared work items and pages.")
 
     def check_permissions(self, request):
         # Membership revocations and privacy changes must take effect immediately,
@@ -185,6 +254,8 @@ class ProjectAccessMixin:
             set_use_read_replica(False)
         super().check_permissions(request)
         if self.project_invitation_endpoint:
+            if is_workspace_client(request.user, self.kwargs.get("slug")):
+                raise PermissionDenied("Clients receive individual resources through the client portal.")
             return
         slug = self.kwargs.get("slug")
         project_id = self.kwargs.get("project_id") or request.query_params.get("project_id")
@@ -218,6 +289,8 @@ class ProjectAccessMixin:
             chat_id = UUIDField().run_validation(chat_id)
             chat_project = ChatMessenger.objects.filter(pk=chat_id).values_list("project_id", flat=True).first()
             if chat_project:
+                if not slug:
+                    slug = Project.objects.filter(pk=chat_project).values_list("workspace__slug", flat=True).first()
                 require_project_access(request.user, slug, chat_project)
         # Workspace file routes and static URLs do not carry a project UUID.
         asset_id = self.kwargs.get("asset_id")
@@ -230,6 +303,11 @@ class ProjectAccessMixin:
             asset = FileAsset.all_objects.filter(asset=key).select_related("issue", "comment").first()
         if asset:
             require_asset_access(request.user, slug, asset, discovery=request.method in ("GET", "HEAD"))
+            if not slug and asset.workspace_id:
+                slug = asset.workspace.slug
+        if not slug and self.kwargs.get("workspace_id"):
+            slug = Workspace.objects.filter(pk=self.kwargs["workspace_id"]).values_list("slug", flat=True).first()
+        self.check_client_permissions(request, slug, project_id, asset)
         if request.method not in ("GET", "HEAD", "OPTIONS") and isinstance(request.data, dict):
             for key in ("project_id", "project", "target_project_id", "destination_project_id"):
                 target_project = request.data.get(key)

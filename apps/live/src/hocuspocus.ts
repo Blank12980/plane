@@ -13,6 +13,8 @@ import { getExtensions } from "@/extensions";
 // lib
 import { onAuthenticate } from "@/lib/auth";
 import { onStateless } from "@/lib/stateless";
+import { getPageService } from "@/services/page/handler";
+import type { HocusPocusServerContext } from "@/types";
 
 export class HocusPocusServerManager {
   private static instance: HocusPocusServerManager | null = null;
@@ -45,6 +47,11 @@ export class HocusPocusServerManager {
     this.server = new Hocuspocus({
       name: this.serverName,
       onAuthenticate,
+      beforeHandleMessage: async ({ context, documentName, connection }) => {
+        const session = context as HocusPocusServerContext;
+        const access = await getPageService(session.documentType, session).fetchCollaborationAccess(documentName);
+        connection.readOnly = access.read_only;
+      },
       onStateless,
       extensions: getExtensions(),
       debounce: 10000,

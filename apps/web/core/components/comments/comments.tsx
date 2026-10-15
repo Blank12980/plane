@@ -7,6 +7,7 @@
 import { useMemo } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
+import { groupCommentReplies } from "@/helpers/comment-threads";
 // gizmo imports
 import type { E_SORT_ORDER } from "@plane/constants";
 import type { TCommentsOperations, TIssueComment } from "@plane/types";
@@ -42,6 +43,11 @@ export const CommentsWrapper = observer(function CommentsWrapper(props: TComment
   // router
   const { workspaceSlug: routerWorkspaceSlug } = useParams();
   const workspaceSlug = routerWorkspaceSlug?.toString();
+  const resolvedComments = comments
+    .map((data) => (typeof data === "string" ? getCommentById?.(data) : data))
+    .filter((comment): comment is TIssueComment => !!comment);
+  const { roots, replies } = groupCommentReplies(resolvedComments);
+  const displayedComments = enableReplies ? roots : resolvedComments;
   const renderCommentCreate = useMemo(
     () =>
       isEditingAllowed && (
@@ -59,7 +65,7 @@ export const CommentsWrapper = observer(function CommentsWrapper(props: TComment
     <div className="relative flex h-full flex-col gap-y-2 overflow-hidden">
       {renderCommentCreate}
       <div className="flex-grow overflow-y-auto py-4">
-        {comments?.map((data, index) => {
+        {displayedComments.map((data, index) => {
           let comment;
           if (typeof data === "string") {
             comment = getCommentById?.(data);
@@ -81,6 +87,8 @@ export const CommentsWrapper = observer(function CommentsWrapper(props: TComment
               showAccessSpecifier={showAccessSpecifier}
               showCopyLinkOption={showCopyLinkOption}
               enableReplies={enableReplies}
+              replies={enableReplies ? replies[comment.id] : undefined}
+              repliesByParent={replies}
             />
           );
         })}

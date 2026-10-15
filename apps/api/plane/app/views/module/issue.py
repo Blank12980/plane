@@ -40,6 +40,7 @@ from plane.utils.filters import ComplexFilterBackend
 from plane.utils.filters import IssueFilterSet
 from .. import BaseViewSet
 from plane.utils.host import base_host
+from plane.utils.module_time_budget import check_linked_module_time_budgets
 
 
 class ModuleIssueViewSet(BaseViewSet):
@@ -228,6 +229,7 @@ class ModuleIssueViewSet(BaseViewSet):
             batch_size=10,
             ignore_conflicts=True,
         )
+        check_linked_module_time_budgets([module_id])
         # Bulk Update the activity
         _ = [
             issue_activity.delay(
@@ -268,6 +270,7 @@ class ModuleIssueViewSet(BaseViewSet):
                 batch_size=10,
                 ignore_conflicts=True,
             )
+            check_linked_module_time_budgets(modules)
             # Bulk Update the activity
             _ = [
                 issue_activity.delay(

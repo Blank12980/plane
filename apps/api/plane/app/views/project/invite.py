@@ -66,6 +66,9 @@ class ProjectInvitationsViewset(BaseViewSet):
             return Response({"error": "Emails are required"}, status=status.HTTP_400_BAD_REQUEST)
 
         for email in emails:
+            email["role"] = serializers.ChoiceField(choices=[(role.value, role.name) for role in ROLE]).run_validation(
+                email.get("role", ROLE.GUEST.value)
+            )
             workspace_role = (
                 WorkspaceMember.objects.filter(
                     workspace__slug=slug, member__email__iexact=email.get("email", "").strip(), is_active=True
@@ -73,10 +76,19 @@ class ProjectInvitationsViewset(BaseViewSet):
                 .values_list("role", flat=True)
                 .first()
             )
+            if workspace_role == ROLE.CLIENT.value:
+                return Response(
+                    {"error": "Use client access settings to share individual work items and pages"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            elif workspace_role is not None and email["role"] == ROLE.CLIENT.value:
+                return Response(
+                    {"error": "Assign the Client role in the workspace first"}, status=status.HTTP_400_BAD_REQUEST
+                )
             if email.get("role", 5) not in [role.value for role in ROLE]:
                 return Response({"error": "Invalid project role"}, status=status.HTTP_400_BAD_REQUEST)
 
-            if workspace_role in [5, 20] and workspace_role != email.get("role", 5):
+            if workspace_role in [3, 5, 20] and workspace_role != email.get("role", 5):
                 return Response(
                     {"error": "You cannot invite a user with different role than workspace role"},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -241,6 +253,13 @@ class ProjectJoinEndpoint(BaseAPIView):
             workspace_member = WorkspaceMember.objects.filter(
                 workspace_id=project_invite.workspace_id, member=request.user
             ).first()
+            if project_invite.role == ROLE.CLIENT.value or (
+                workspace_member and workspace_member.role == ROLE.CLIENT.value
+            ):
+                return Response(
+                    {"error": "A workspace administrator shares individual work items and pages with clients"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             promote_explicit_workspace_membership(
                 request.user,
                 project_invite.workspace,

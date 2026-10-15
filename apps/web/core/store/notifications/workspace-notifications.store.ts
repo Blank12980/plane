@@ -61,6 +61,8 @@ export interface IWorkspaceNotificationStore {
 }
 
 export class WorkspaceNotificationStore implements IWorkspaceNotificationStore {
+  private unreadRequestVersion = 0;
+  notificationPollAt = Date.now();
   // constants
   paginatedCount = 300;
   // observables
@@ -89,6 +91,7 @@ export class WorkspaceNotificationStore implements IWorkspaceNotificationStore {
       // observables
       loader: observable.ref,
       unreadNotificationsCount: observable,
+      notificationPollAt: observable,
       notifications: observable,
       currentNotificationTab: observable.ref,
       currentSelectedNotificationId: observable,
@@ -131,17 +134,18 @@ export class WorkspaceNotificationStore implements IWorkspaceNotificationStore {
           : !n.is_mentioned_notification
       )
       .filter((n) => {
+        const snoozed = !!n.snoozed_till && new Date(n.snoozed_till).getTime() > this.notificationPollAt;
         if (!this.filters.archived && !this.filters.snoozed) {
           if (n.archived_at) {
             return false;
-          } else if (n.snoozed_till) {
+          } else if (snoozed) {
             return false;
           } else {
             return true;
           }
         } else {
           if (this.filters.snoozed) {
-            return n.snoozed_till ? true : false;
+            return snoozed;
           } else if (this.filters.archived) {
             return n.archived_at ? true : false;
           } else {
@@ -315,11 +319,20 @@ export class WorkspaceNotificationStore implements IWorkspaceNotificationStore {
    * @returns { number | undefined }
    */
   getUnreadNotificationsCount = async (workspaceSlug: string): Promise<TUnreadNotificationsCount | undefined> => {
+    const requestVersion = ++this.unreadRequestVersion;
     try {
       const unreadNotificationCount = await workspaceNotificationService.fetchUnreadNotificationsCount(workspaceSlug);
-      if (unreadNotificationCount)
+      if (
+        unreadNotificationCount &&
+        requestVersion === this.unreadRequestVersion &&
+        this.store.router.workspaceSlug === workspaceSlug
+      )
         runInAction(() => {
           set(this, "unreadNotificationsCount", unreadNotificationCount);
+          this.notificationPollAt = Date.now();
+          if (!this.filters.archived && !this.filters.snoozed && !Object.values(this.filters.type).some(Boolean)) {
+            this.mutateNotifications(unreadNotificationCount.recent_notifications ?? []);
+          }
         });
       return unreadNotificationCount || undefined;
     } catch (error) {

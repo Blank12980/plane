@@ -18,6 +18,8 @@ import { useWorkspace } from "@/hooks/store/use-workspace";
 // local imports
 import { NotificationContent } from "./content";
 import { NotificationOption } from "./options";
+import { notificationTarget } from "@/helpers/notification-alerts";
+import { convertMinutesToHoursMinutesString } from "@plane/utils";
 
 type TNotificationItem = {
   workspaceSlug: string;
@@ -40,7 +42,7 @@ export const NotificationItem = observer(function NotificationItem(props: TNotif
   const issueId = notification?.data?.issue?.id || undefined;
   const workspace = getWorkspaceBySlug(workspaceSlug);
 
-  const notificationField = notification?.data?.issue_activity.field || undefined;
+  const notificationField = notification?.data?.issue_activity?.field || undefined;
   const notificationTriggeredBy = notification.triggered_by_details || undefined;
 
   const handleNotificationIssuePeekOverview = async () => {
@@ -65,6 +67,40 @@ export const NotificationItem = observer(function NotificationItem(props: TNotif
     }
   };
 
+  if (notification.entity_name === "module" && notification.data?.module) {
+    const budget = notification.data.time_budget;
+    return (
+      <Row
+        className={cn("flex flex-col gap-2 border-b border-subtle p-4", {
+          "bg-accent-primary/10": !notification.read_at,
+        })}
+      >
+        <a
+          className="text-14 font-semibold text-primary"
+          href={notificationTarget(workspaceSlug, notification)}
+          onClick={() => {
+            if (!notification.read_at) void markNotificationAsRead(workspaceSlug).catch(console.error);
+          }}
+        >
+          {notification.title}
+        </a>
+        {budget && (
+          <p className="text-12 text-secondary">
+            {budget.month.slice(0, 7)}: {convertMinutesToHoursMinutesString(budget.total_minutes)} /{" "}
+            {convertMinutesToHoursMinutesString(budget.limit_minutes)}
+          </p>
+        )}
+        <NotificationOption
+          workspaceSlug={workspaceSlug}
+          notificationId={notification.id}
+          isSnoozeStateModalOpen={isSnoozeStateModalOpen}
+          setIsSnoozeStateModalOpen={setIsSnoozeStateModalOpen}
+          customSnoozeModal={customSnoozeModal}
+          setCustomSnoozeModal={setCustomSnoozeModal}
+        />
+      </Row>
+    );
+  }
   if (!workspaceSlug || !notificationId || !notification?.id || !notificationField || !workspace?.id || !projectId)
     return <></>;
 
