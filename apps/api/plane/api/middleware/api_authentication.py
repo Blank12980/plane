@@ -28,10 +28,15 @@ class APIKeyAuthentication(authentication.BaseAuthentication):
 
     def validate_api_token(self, token):
         try:
-            api_token = APIToken.objects.get(
-                Q(Q(expired_at__gt=timezone.now()) | Q(expired_at__isnull=True)),
-                token=token,
-                is_active=True,
+            api_token = (
+                APIToken.objects.using("default")
+                .select_related("user")
+                .get(
+                    Q(Q(expired_at__gt=timezone.now()) | Q(expired_at__isnull=True)),
+                    token=token,
+                    is_active=True,
+                    user__is_active=True,
+                )
             )
         except APIToken.DoesNotExist:
             raise AuthenticationFailed("Given API token is not valid")

@@ -60,7 +60,7 @@ from plane.app.permissions import (
     ProjectMemberPermission,
 )
 from plane.bgtasks.issue_activities_task import issue_activity
-from plane.utils.project_access import projects_for_user, is_workspace_admin
+from plane.utils.project_access import projects_for_user, is_workspace_admin, has_project_role
 from plane.db.models import (
     Issue,
     IssueActivity,
@@ -1493,6 +1493,11 @@ class IssueCommentDetailAPIEndpoint(BaseAPIView):
     permission_classes = [ProjectLitePermission]
     use_read_replica = True
 
+    def can_manage_comment(self, request, slug, project_id, comment):
+        return comment.actor_id == request.user.id or has_project_role(
+            request.user, slug, project_id, [ROLE.ADMIN.value]
+        )
+
     def get_queryset(self):
         return (
             IssueComment.objects.filter(workspace__slug=self.kwargs.get("slug"))
@@ -1572,6 +1577,8 @@ class IssueCommentDetailAPIEndpoint(BaseAPIView):
         Validates external ID uniqueness if provided.
         """
         issue_comment = IssueComment.objects.get(workspace__slug=slug, project_id=project_id, issue_id=issue_id, pk=pk)
+        if not self.can_manage_comment(request, slug, project_id, issue_comment):
+            return Response({"error": "You can only change your own comments."}, status=status.HTTP_403_FORBIDDEN)
         requested_data = json.dumps(self.request.data, cls=DjangoJSONEncoder)
         current_instance = json.dumps(IssueCommentSerializer(issue_comment).data, cls=DjangoJSONEncoder)
 
@@ -1641,6 +1648,8 @@ class IssueCommentDetailAPIEndpoint(BaseAPIView):
         Records deletion activity for audit purposes.
         """
         issue_comment = IssueComment.objects.get(workspace__slug=slug, project_id=project_id, issue_id=issue_id, pk=pk)
+        if not self.can_manage_comment(request, slug, project_id, issue_comment):
+            return Response({"error": "You can only delete your own comments."}, status=status.HTTP_403_FORBIDDEN)
         current_instance = json.dumps(IssueCommentSerializer(issue_comment).data, cls=DjangoJSONEncoder)
         issue_comment.delete()
         issue_activity.delay(

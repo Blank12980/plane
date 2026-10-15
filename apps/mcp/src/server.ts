@@ -11,7 +11,7 @@ import { timeAndTagTools } from "./tools/time-and-tags";
 import { workItemTools } from "./tools/work-items";
 
 export const SERVER_NAME = "gizmo";
-export const SERVER_VERSION = "0.1.0";
+export const SERVER_VERSION = "1.2.3";
 
 export const allTools: ToolDefinition<any>[] = [
   ...contextTools,

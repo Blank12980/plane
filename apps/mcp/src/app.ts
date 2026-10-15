@@ -43,6 +43,7 @@ export function createApp({ config, fetch }: AppOptions): express.Express {
   app.disable("x-powered-by");
 
   const router = express.Router();
+  router.use(originGuard(config.allowedOrigins));
 
   router.get("/health", (_req, res) => {
     res.json({ status: "OK", name: SERVER_NAME, version: SERVER_VERSION });
@@ -82,13 +83,20 @@ export function createApp({ config, fetch }: AppOptions): express.Express {
     }
   };
 
-  router.post("/", originGuard(config.allowedOrigins), express.json({ limit: MAX_BODY }), (req, res) => {
+  router.post("/", express.json({ limit: MAX_BODY }), (req, res) => {
     void handleMcpRequest(req, res);
   });
 
   // Stateless server: no server-initiated streams and no sessions to delete.
   router.get("/", (_req, res) => jsonRpcError(res, 405, -32000, "Method not allowed"));
   router.delete("/", (_req, res) => jsonRpcError(res, 405, -32000, "Method not allowed"));
+
+  router.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+    const type = (error as { type?: string })?.type;
+    if (type === "entity.parse.failed") jsonRpcError(res, 400, -32700, "Parse error");
+    else if (type === "entity.too.large") jsonRpcError(res, 413, -32000, "Request body is too large");
+    else next(error);
+  });
 
   app.use("/mcp", router);
   return app;

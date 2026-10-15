@@ -20,6 +20,7 @@ from drf_spectacular.utils import extend_schema
 from plane.app.permissions import allow_permission, ROLE
 from plane.app.serializers import IssueWorkLogSerializer
 from plane.db.models import Issue, IssueWorkLog, ProjectMember
+from plane.utils.project_access import is_workspace_admin, projects_for_user
 from .base import BaseAPIView
 
 TIME_REPORT_GROUPS = ("user", "issue", "project", "day")
@@ -147,12 +148,17 @@ class TimeReportAPIEndpoint(BaseAPIView):
         if date_from and date_to and date_from > date_to:
             return Response({"error": "date_from must not be after date_to."}, status=status.HTTP_400_BAD_REQUEST)
 
-        visible_projects = ProjectMember.objects.filter(
-            workspace__slug=slug,
-            member=request.user,
-            is_active=True,
-            role__in=[ROLE.ADMIN.value, ROLE.MEMBER.value],
-        ).values_list("project_id", flat=True)
+        visible_projects = projects_for_user(request.user, slug)
+        if not is_workspace_admin(request.user, slug):
+            visible_projects = visible_projects.filter(
+                pk__in=ProjectMember.objects.filter(
+                    workspace__slug=slug,
+                    member=request.user,
+                    is_active=True,
+                    is_instance_admin_access=False,
+                    role__in=[ROLE.ADMIN.value, ROLE.MEMBER.value],
+                ).values("project_id")
+            )
 
         worklogs = IssueWorkLog.objects.filter(
             workspace__slug=slug,

@@ -4,6 +4,7 @@ import { ToolInputError, type ToolContext } from "./context";
 export const MAX_PER_PAGE = 100;
 export const DEFAULT_PER_PAGE = 25;
 export const MAX_SEARCH_RESULTS = 50;
+const MAX_LOOKUP_PAGES = 20;
 const MAX_DESCRIPTION_CHARS = 4000;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -80,20 +81,19 @@ export function textToHtml(text: string): string {
 
 /** Accepts 90, "90", "90m", "1h", "1h30m", "1.5h", "1:30" and returns minutes. */
 export function parseDuration(value: string | number): number {
-  if (typeof value === "number") return Math.round(value);
-  const input = value.trim().toLowerCase().replace(/\s+/g, "");
-  let minutes: number | undefined;
+  const input = String(value).trim().toLowerCase().replace(/\s+/g, "");
+  let minutes: number | undefined = typeof value === "number" ? value : undefined;
   if (/^\d+$/.test(input)) minutes = Number(input);
   else if (/^\d+:\d{1,2}$/.test(input)) {
     const [h, m] = input.split(":").map(Number);
-    minutes = h * 60 + m;
+    if (m < 60) minutes = h * 60 + m;
   } else {
     const match = input.match(/^(?:(\d+(?:[.,]\d+)?)h)?(?:(\d+)m(?:in)?)?$/);
     if (match && (match[1] || match[2])) {
       minutes = Math.round(Number((match[1] ?? "0").replace(",", ".")) * 60) + Number(match[2] ?? 0);
     }
   }
-  if (minutes === undefined || !Number.isFinite(minutes) || minutes < 1 || minutes > 24 * 60) {
+  if (minutes === undefined || !Number.isInteger(minutes) || minutes < 1 || minutes > 24 * 60) {
     throw new ToolInputError(
       `Invalid duration "${value}". Use minutes (90) or forms like 1h30m, 1.5h, 1:30 (max 24h).`
     );
@@ -164,11 +164,35 @@ export function summarizeComment(comment: Json) {
   };
 }
 
+/** Lookups must follow cursors: a name on a later page is still a valid reference. */
+async function findOnPages(
+  ctx: ToolContext,
+  path: string,
+  matches: (item: Json) => boolean
+): Promise<Json | undefined> {
+  const seen = new Set<string>();
+  let cursor: string | undefined;
+  for (let page = 0; page < MAX_LOOKUP_PAGES; page++) {
+    // Each cursor is supplied by the preceding response.
+    // eslint-disable-next-line no-await-in-loop
+    const data = paginated<Json>(await ctx.api.get(path, pageQuery(MAX_PER_PAGE, cursor)));
+    const match = data.results.find(matches);
+    if (match) return match;
+    if (!data.next_cursor) return undefined;
+    const nextCursor = String(data.next_cursor);
+    if (seen.has(nextCursor)) break;
+    seen.add(nextCursor);
+    cursor = nextCursor;
+  }
+  throw new ToolInputError("Name lookup exceeded its pagination limit. Pass the resource UUID instead.");
+}
+
 export async function resolveProject(ctx: ToolContext, slug: string, ref: string): Promise<string> {
   const value = ref.trim();
   if (isUuid(value)) return value;
-  const projects = listOf(await ctx.api.get(`/workspaces/${slug}/projects/`, { per_page: MAX_PER_PAGE }));
-  const match = projects.find(
+  const match = await findOnPages(
+    ctx,
+    `/workspaces/${slug}/projects/`,
     (project) => String(project.identifier).toLowerCase() === value.toLowerCase() || project.name === value
   );
   if (!match) throw new ToolInputError(`Project "${ref}" not found. Use list_projects to see available projects.`);
@@ -231,12 +255,18 @@ async function resolveByName(
   listTool: string
 ): Promise<string[]> {
   if (refs.every(isUuid)) return refs.map((ref) => ref.trim());
-  const items = listOf(await ctx.api.get(path, { per_page: MAX_PER_PAGE }));
+  const resolved = new Map<string, string>();
+  const names = new Set(refs.filter((value) => !isUuid(value)).map((ref) => ref.trim().toLowerCase()));
+  await findOnPages(ctx, path, (item) => {
+    const name = String(item.name).toLowerCase();
+    if (names.has(name)) resolved.set(name, String(item.id));
+    return resolved.size === names.size;
+  });
   return refs.map((ref) => {
     if (isUuid(ref)) return ref.trim();
-    const match = items.find((item) => String(item.name).toLowerCase() === ref.trim().toLowerCase());
-    if (!match) throw new ToolInputError(`${kind} "${ref}" not found. Use ${listTool} to see available values.`);
-    return String(match.id);
+    const id = resolved.get(ref.trim().toLowerCase());
+    if (!id) throw new ToolInputError(`${kind} "${ref}" not found. Use ${listTool} to see available values.`);
+    return id;
   });
 }
 

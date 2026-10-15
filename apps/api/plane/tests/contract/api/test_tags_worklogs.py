@@ -229,12 +229,23 @@ class TestTimeReportAPI:
             )
         return other_issue
 
-    def test_group_by_user_only_counts_visible_projects(self, api_key_client, workspace, logs, member, create_user):
+    def test_workspace_admin_sees_all_workspace_projects(self, api_key_client, workspace, logs, member, create_user):
         response = api_key_client.get(self.url(workspace))
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["total_minutes"] == 105
+        assert response.data["total_minutes"] == 605
         by_user = {row["user_id"]: row["minutes"] for row in response.data["results"]}
-        assert by_user == {str(member.id): 45, str(create_user.id): 60}
+        assert by_user == {str(member.id): 45, str(create_user.id): 560}
+
+    def test_member_only_sees_accessible_projects(self, workspace, logs, member):
+        client = client_for(member, workspace, scopes=["read"])
+        response = client.get(self.url(workspace))
+        assert response.status_code == 200
+        assert response.data["total_minutes"] == 105
+
+    def test_revoked_workspace_membership_hides_report(self, workspace, logs, member):
+        client = client_for(member, workspace, scopes=["read"])
+        WorkspaceMember.objects.filter(workspace=workspace, member=member).update(is_active=False)
+        assert client.get(self.url(workspace)).status_code == 403
 
     def test_group_by_issue_with_filters(self, api_key_client, workspace, issue, logs, member):
         response = api_key_client.get(

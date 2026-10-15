@@ -5,6 +5,9 @@ packages:
   - "!apps/proxy"
 
 catalog:
+  "@modelcontextprotocol/sdk": 1.32.1
+  "@types/express": 4.17.23
+  zod: ^3.25.76
   "@atlaskit/pragmatic-drag-and-drop-auto-scroll": 1.4.0
   "@atlaskit/pragmatic-drag-and-drop-hitbox": 1.1.0
   "@atlaskit/pragmatic-drag-and-drop": 1.7.4

@@ -61,6 +61,8 @@ class Command(BaseCommand):
             raise CommandError("At least one scope is required for agent tokens")
         if not is_valid_rate(options["rate_limit"]):
             raise CommandError("Rate limit must look like 60/min, 10/s, 1000/hour")
+        if options["expires_days"] < 0:
+            raise CommandError("Token lifetime cannot be negative (use 0 for no expiry)")
 
         workspace = Workspace.objects.filter(slug=options["workspace"]).first()
         if workspace is None:
@@ -81,6 +83,9 @@ class Command(BaseCommand):
                 )
                 user.set_unusable_password()
                 user.save()
+
+            if not user.is_active:
+                raise CommandError("User is inactive")
 
             member, _ = WorkspaceMember.objects.get_or_create(
                 workspace=workspace, member=user, defaults={"role": MEMBER_ROLE}

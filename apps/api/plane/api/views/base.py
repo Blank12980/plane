@@ -44,32 +44,7 @@ def check_token_permissions(view, request):
             view.permission_denied(request, message=permission.message, code=None)
 
 
-class TimezoneMixin:
-    """
-    This enables timezone conversion according
-    to the user set timezone
-    """
-
-    def initial(self, request, *args, **kwargs):
-        super().initial(request, *args, **kwargs)
-        if request.user.is_authenticated:
-            timezone.activate(zoneinfo.ZoneInfo(request.user.user_timezone))
-        else:
-            timezone.deactivate()
-
-
-class BaseAPIView(ProjectAccessMixin, TimezoneMixin, GenericAPIView, ReadReplicaControlMixin, BasePaginator):
-    authentication_classes = [APIKeyAuthentication]
-
-    permission_classes = [IsAuthenticated]
-
-    use_read_replica = False
-
-    def filter_queryset(self, queryset):
-        for backend in list(self.filter_backends):
-            queryset = backend().filter_queryset(self.request, queryset, self)
-        return queryset
-
+class TokenAccessMixin:
     def check_permissions(self, request):
         check_token_permissions(self, request)
         super().check_permissions(request)
@@ -95,6 +70,50 @@ class BaseAPIView(ProjectAccessMixin, TimezoneMixin, GenericAPIView, ReadReplica
         throttle_classes.append(ApiKeyRateThrottle())
 
         return throttle_classes
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        # Call super to get the default response
+        response = super().finalize_response(request, response, *args, **kwargs)
+
+        # Add custom headers if they exist in the request META
+        ratelimit_remaining = request.META.get("X-RateLimit-Remaining")
+        if ratelimit_remaining is not None:
+            response["X-RateLimit-Remaining"] = ratelimit_remaining
+
+        ratelimit_reset = request.META.get("X-RateLimit-Reset")
+        if ratelimit_reset is not None:
+            response["X-RateLimit-Reset"] = ratelimit_reset
+
+        return response
+
+
+class TimezoneMixin:
+    """
+    This enables timezone conversion according
+    to the user set timezone
+    """
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if request.user.is_authenticated:
+            timezone.activate(zoneinfo.ZoneInfo(request.user.user_timezone))
+        else:
+            timezone.deactivate()
+
+
+class BaseAPIView(
+    TokenAccessMixin, ProjectAccessMixin, TimezoneMixin, GenericAPIView, ReadReplicaControlMixin, BasePaginator
+):
+    authentication_classes = [APIKeyAuthentication]
+
+    permission_classes = [IsAuthenticated]
+
+    use_read_replica = False
+
+    def filter_queryset(self, queryset):
+        for backend in list(self.filter_backends):
+            queryset = backend().filter_queryset(self.request, queryset, self)
+        return queryset
 
     def handle_exception(self, exc):
         """
@@ -147,21 +166,6 @@ class BaseAPIView(ProjectAccessMixin, TimezoneMixin, GenericAPIView, ReadReplica
             response = self.handle_exception(exc)
             return exc
 
-    def finalize_response(self, request, response, *args, **kwargs):
-        # Call super to get the default response
-        response = super().finalize_response(request, response, *args, **kwargs)
-
-        # Add custom headers if they exist in the request META
-        ratelimit_remaining = request.META.get("X-RateLimit-Remaining")
-        if ratelimit_remaining is not None:
-            response["X-RateLimit-Remaining"] = ratelimit_remaining
-
-        ratelimit_reset = request.META.get("X-RateLimit-Reset")
-        if ratelimit_reset is not None:
-            response["X-RateLimit-Reset"] = ratelimit_reset
-
-        return response
-
     @property
     def workspace_slug(self):
         return self.kwargs.get("slug", None)
@@ -186,7 +190,9 @@ class BaseAPIView(ProjectAccessMixin, TimezoneMixin, GenericAPIView, ReadReplica
         return expand if expand else None
 
 
-class BaseViewSet(ProjectAccessMixin, TimezoneMixin, ReadReplicaControlMixin, ModelViewSet, BasePaginator):
+class BaseViewSet(
+    TokenAccessMixin, ProjectAccessMixin, TimezoneMixin, ReadReplicaControlMixin, ModelViewSet, BasePaginator
+):
     model = None
 
     authentication_classes = [APIKeyAuthentication]
@@ -194,10 +200,6 @@ class BaseViewSet(ProjectAccessMixin, TimezoneMixin, ReadReplicaControlMixin, Mo
         IsAuthenticated,
     ]
     use_read_replica = False
-
-    def check_permissions(self, request):
-        check_token_permissions(self, request)
-        super().check_permissions(request)
 
     def get_queryset(self):
         try:

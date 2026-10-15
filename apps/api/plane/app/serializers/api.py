@@ -3,7 +3,7 @@
 # See the LICENSE file for details.
 
 from .base import BaseSerializer
-from plane.db.models import APIToken, APIActivityLog
+from plane.db.models import APIToken, APIActivityLog, WorkspaceMember
 from plane.db.models.api import API_TOKEN_SCOPES
 from rest_framework import serializers
 from django.utils import timezone
@@ -52,9 +52,32 @@ class APITokenReadSerializer(BaseSerializer):
         exclude = ("token",)
 
     def get_is_active(self, obj: APIToken) -> bool:
-        if obj.expired_at is None:
-            return True
-        return timezone.now() < obj.expired_at
+        return obj.is_active and (obj.expired_at is None or timezone.now() < obj.expired_at)
+
+
+class APITokenCreateSerializer(APITokenSerializer):
+    expired_at = serializers.DateTimeField(required=False, allow_null=True)
+    workspace_slug = serializers.SlugField(required=False, allow_blank=True, write_only=True)
+
+    def validate_expired_at(self, value):
+        if value is not None and value <= timezone.now():
+            raise serializers.ValidationError("Expiry must be in the future.")
+        return value
+
+    def validate(self, attrs):
+        slug = attrs.pop("workspace_slug", None)
+        if slug:
+            workspace_id = (
+                WorkspaceMember.objects.filter(
+                    member=self.context["request"].user, workspace__slug=slug, is_active=True
+                )
+                .values_list("workspace_id", flat=True)
+                .first()
+            )
+            if workspace_id is None:
+                raise serializers.ValidationError({"workspace_slug": ["You are not a member of this workspace."]})
+            attrs["workspace_id"] = workspace_id
+        return attrs
 
 
 class APIActivityLogSerializer(BaseSerializer):

@@ -30,10 +30,10 @@ export const discussionTools = [
     run: async (args, ctx) => {
       const slug = resolveWorkspace(ctx, args.workspace_slug);
       const item = await resolveWorkItem(ctx, slug, args.work_item, args.project);
-      const data = await ctx.api.get(
-        `${base(slug, item.projectId, item.id)}/comments/`,
-        pageQuery(args.per_page, args.cursor)
-      );
+      const data = await ctx.api.get(`${base(slug, item.projectId, item.id)}/comments/`, {
+        ...pageQuery(args.per_page, args.cursor),
+        order_by: "created_at",
+      });
       return paginated(data, summarizeComment);
     },
   }),

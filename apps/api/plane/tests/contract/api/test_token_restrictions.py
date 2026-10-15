@@ -10,7 +10,7 @@ from django.core.management import call_command
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from plane.db.models import APIToken, Issue, Project, ProjectMember, State, Workspace, WorkspaceMember
+from plane.db.models import APIToken, Issue, IssueComment, Project, ProjectMember, State, Workspace, WorkspaceMember
 
 
 @pytest.fixture(autouse=True)
@@ -90,6 +90,12 @@ class TestWorkspaceBinding:
 @pytest.mark.contract
 @pytest.mark.django_db
 class TestTokenScopes:
+    def test_tag_fields_cannot_bypass_the_tags_scope(self, create_user, workspace, project, issue):
+        client = token_client(create_user, workspace=workspace, scopes=["read", "issues:write"])
+        response = client.patch(f"{issues_url(workspace, project)}{issue.id}/", {"tag_ids": []}, format="json")
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert "tags:write" in response.data["detail"]
+
     def test_read_scope_allows_get_and_blocks_writes(self, create_user, workspace, project):
         client = token_client(create_user, workspace=workspace, scopes=["read"])
         assert client.get(issues_url(workspace, project)).status_code == status.HTTP_200_OK
@@ -158,6 +164,20 @@ class TestTokenScopes:
 @pytest.mark.contract
 @pytest.mark.django_db
 class TestTokenRateLimit:
+    def test_limit_is_shared_by_generic_views_and_viewsets(self, create_user, workspace):
+        client = token_client(create_user, workspace=workspace, scopes=["read"], rate="2/min")
+        assert client.get("/api/v1/users/me/").status_code == 200
+        response = client.get(f"/api/v1/workspaces/{workspace.slug}/invitations/")
+        assert response.status_code == 200
+        assert response["X-RateLimit-Remaining"] == "0"
+        assert client.get(f"/api/v1/workspaces/{workspace.slug}/invitations/").status_code == 429
+
+    def test_inactive_user_cannot_use_an_active_token(self, create_user, workspace):
+        client = token_client(create_user, workspace=workspace, scopes=["read"])
+        create_user.is_active = False
+        create_user.save(update_fields=["is_active"])
+        assert client.get("/api/v1/users/me/").status_code in (401, 403)
+
     def test_token_rate_limit_is_enforced(self, create_user, workspace, project):
         client = token_client(create_user, workspace=workspace, scopes=["read"], rate="2/min")
         url = issues_url(workspace, project)
@@ -169,6 +189,13 @@ class TestTokenRateLimit:
 @pytest.mark.contract
 @pytest.mark.django_db
 class TestApiTokenAppEndpoint:
+    @pytest.mark.parametrize("expired_at", ["not-a-date", "2020-01-01T00:00:00Z"])
+    def test_invalid_expiry_is_rejected_without_creating_a_token(self, session_client, expired_at):
+        response = session_client.post("/api/users/api-tokens/", {"expired_at": expired_at}, format="json")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "expired_at" in response.data
+        assert not APIToken.objects.exists()
+
     def test_create_scoped_bound_token(self, session_client, workspace):
         response = session_client.post(
             "/api/users/api-tokens/",
@@ -223,3 +250,53 @@ def test_create_agent_token_command(workspace, project, capsys):
     assert token.expired_at is not None
     assert ProjectMember.objects.filter(project=project, member=token.user, role=15).exists()
     assert token.token in capsys.readouterr().out
+
+
+@pytest.mark.contract
+@pytest.mark.django_db
+def test_agent_token_rejects_negative_lifetime(workspace, create_user):
+    from django.core.management import CommandError
+
+    with pytest.raises(CommandError, match="negative"):
+        call_command("create_agent_token", email=create_user.email, workspace=workspace.slug, expires_days=-1)
+    assert not APIToken.objects.exists()
+
+
+@pytest.mark.contract
+@pytest.mark.django_db
+@pytest.mark.parametrize("method", ["patch", "delete"])
+def test_members_cannot_change_others_comments(workspace, project, issue, create_user, method):
+    from plane.db.models import User
+
+    member = User.objects.create(email="commenter@gizmo.so", username="commenter")
+    WorkspaceMember.objects.create(workspace=workspace, member=member, role=15)
+    ProjectMember.objects.create(project=project, member=member, role=15)
+    comment = IssueComment.objects.create(
+        issue=issue, project=project, workspace=workspace, actor=create_user, comment_html="<p>Original</p>"
+    )
+    client = token_client(member, workspace=workspace, scopes=["read", "comments:write"])
+    url = f"{issues_url(workspace, project)}{issue.id}/comments/{comment.id}/"
+    response = getattr(client, method)(url, {"comment_html": "<p>Changed</p>"}, format="json")
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    comment.refresh_from_db()
+    assert comment.comment_html == "<p>Original</p>"
+    assert comment.deleted_at is None
+
+
+@pytest.mark.contract
+@pytest.mark.django_db
+def test_comment_author_can_edit_their_comment(workspace, project, issue, create_user):
+    from plane.db.models import User
+
+    author = User.objects.create(email="author@gizmo.so", username="author")
+    WorkspaceMember.objects.create(workspace=workspace, member=author, role=15)
+    ProjectMember.objects.create(project=project, member=author, role=15)
+    comment = IssueComment.objects.create(
+        issue=issue, project=project, workspace=workspace, actor=author, comment_html="<p>Original</p>"
+    )
+    client = token_client(author, workspace=workspace, scopes=["read", "comments:write"])
+    url = f"{issues_url(workspace, project)}{issue.id}/comments/{comment.id}/"
+    response = client.patch(url, {"comment_html": "<p>Changed</p>"}, format="json")
+    assert response.status_code == 200
+    comment.refresh_from_db()
+    assert comment.comment_html == "<p>Changed</p>"

@@ -84,13 +84,17 @@ export class GizmoApiClient {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     let response: Response;
+    let text: string;
     try {
       response = await this.fetchImpl(this.buildUrl(path, query), {
         method,
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: controller.signal,
+        redirect: "error",
       });
+      // The timeout covers the response body too, not just receipt of the headers.
+      text = await response.text();
     } catch (error) {
       if ((error as Error)?.name === "AbortError") {
         throw new ApiError(504, `Gizmo API did not answer within ${this.timeoutMs} ms`, path);
@@ -100,7 +104,6 @@ export class GizmoApiClient {
       clearTimeout(timer);
     }
 
-    const text = await response.text();
     let data: unknown = undefined;
     if (text) {
       try {

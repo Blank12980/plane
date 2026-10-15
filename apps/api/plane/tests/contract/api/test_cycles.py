@@ -71,6 +71,19 @@ class TestCycleListCreateAPIEndpoint:
         return f"/api/v1/workspaces/{workspace_slug}/projects/{project_id}/cycles/"
 
     @pytest.mark.django_db
+    def test_payload_cannot_override_the_route_project(self, api_key_client, workspace, project):
+        project.cycle_view = False
+        project.save(update_fields=["cycle_view"])
+        other = Project.objects.create(name="Enabled", identifier="EN", workspace=workspace, cycle_view=True)
+        response = api_key_client.post(
+            self.get_cycle_url(workspace.slug, project.id),
+            {"name": "Should fail", "project_id": str(other.id)},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert not Cycle.objects.filter(project=project).exists()
+
+    @pytest.mark.django_db
     def test_create_cycle_success(self, api_key_client, workspace, project, cycle_data):
         """Test successful cycle creation"""
         url = self.get_cycle_url(workspace.slug, project.id)

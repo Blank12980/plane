@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 
 import { ApiError, GizmoApiClient } from "../src/api-client";
 import { mockApi } from "./mock-api";
@@ -47,5 +49,56 @@ describe("GizmoApiClient", () => {
         }),
     });
     await expect(slow.get("/x/")).rejects.toMatchObject({ status: 504 });
+  });
+
+  it("times out when response headers arrive but the body stalls", async () => {
+    const client = new GizmoApiClient({
+      baseUrl: "http://api:8000",
+      apiKey: "k",
+      timeoutMs: 20,
+      fetch: async (_input, init) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              init?.signal?.addEventListener("abort", () =>
+                controller.error(Object.assign(new Error("aborted"), { name: "AbortError" }))
+              );
+            },
+          })
+        ),
+    });
+    await expect(client.get("/x/")).rejects.toMatchObject({ status: 504 });
+  });
+
+  it("does not follow redirects carrying the API key", async () => {
+    let redirectedRequests = 0;
+    const server = createServer((req, res) => {
+      if (req.url === "/target") {
+        redirectedRequests++;
+        res.end("{}");
+      } else {
+        res.writeHead(302, { Location: "/target" });
+        res.end();
+      }
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const client = new GizmoApiClient({
+        baseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+        apiKey: "secret",
+      });
+      await expect(client.get("/x/")).rejects.toMatchObject({ status: 502 });
+      expect(redirectedRequests).toBe(0);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        })
+      );
+    }
   });
 });

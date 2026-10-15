@@ -111,4 +111,12 @@ class TokenScopePermission(BasePermission):
         if not api_token.has_scope(scope):
             self.message = f"This API token is missing the '{scope}' scope."
             return False
+        if (
+            type(view).__name__ in ("IssueListCreateAPIEndpoint", "IssueDetailAPIEndpoint")
+            and request.method not in SAFE_METHODS
+            and any(field in request.data for field in ("tag_ids", "tags"))
+            and not api_token.has_scope("tags:write")
+        ):
+            self.message = "This API token is missing the 'tags:write' scope."
+            return False
         return True

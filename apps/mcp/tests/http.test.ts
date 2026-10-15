@@ -69,6 +69,41 @@ describe("HTTP transport", () => {
     expect((await fetch(`${url}/mcp`, { method: "DELETE", headers: { Authorization: "Bearer t" } })).status).toBe(405);
   });
 
+  it.each(["GET", "DELETE"])("checks the origin for %s too", async (method) => {
+    const { url } = await start();
+    const response = await fetch(`${url}/mcp`, { method, headers: { Origin: "https://evil.example" } });
+    expect(response.status).toBe(403);
+  });
+
+  it.each([
+    ["{", 400, -32700],
+    [JSON.stringify({ text: "x".repeat(1024 * 1024) }), 413, -32000],
+  ])("returns a JSON-RPC error for invalid request bodies", async (body, status, code) => {
+    const { url } = await start();
+    const response = await fetch(`${url}/mcp`, {
+      method: "POST",
+      headers: { ...headers, Authorization: "Bearer t" },
+      body: String(body),
+    });
+    expect(response.status).toBe(status);
+    expect(await response.json()).toMatchObject({ jsonrpc: "2.0", error: { code }, id: null });
+  });
+
+  it("keeps tokens isolated between simultaneous callers", async () => {
+    const { url, api } = await start();
+    await Promise.all(
+      ["first", "second"].map(async (token, index) => {
+        const response = await fetch(`${url}/mcp`, {
+          method: "POST",
+          headers: { ...headers, Authorization: `Bearer ${token}` },
+          body: rpc(index + 1, "tools/call", { name: "whoami", arguments: {} }),
+        });
+        expect(response.status).toBe(200);
+      })
+    );
+    expect(api.calls.map((call) => call.headers["x-api-key"]).toSorted()).toEqual(["first", "second"]);
+  });
+
   it("works end to end with the SDK client and forwards the bearer token as X-Api-Key", async () => {
     const { url, api } = await start();
     const client = new Client({ name: "e2e", version: "1.0.0" });
