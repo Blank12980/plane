@@ -6,6 +6,8 @@ from django.db import models
 class ModuleTimeBudget(models.Model):
     module = models.OneToOneField("db.Module", on_delete=models.CASCADE, primary_key=True, related_name="time_budget")
     limit_minutes = models.PositiveIntegerField(null=True, blank=True)
+    # Count the time logged on sub-work-items of the module's work items as well ("everything below the module").
+    include_subtasks = models.BooleanField(default=True)
 
     class Meta:
         db_table = "module_time_budgets"

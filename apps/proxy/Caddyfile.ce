@@ -13,31 +13,55 @@
     }
 }
 
+# Zero-downtime rollouts (setup.sh): during a rollout the old and the new
+# container of a service share one DNS name. If a connection to the container
+# that is being retired breaks, keep trying for a few seconds instead of
+# answering 502 - the next dial lands on the healthy container.
+(retry_upstream) {
+    lb_try_duration 8s
+    lb_try_interval 250ms
+}
+
 (plane_proxy) {
     request_body {
         max_size {$FILE_SIZE_LIMIT}
     }
     
     redir /spaces /spaces/ permanent
-    reverse_proxy /spaces/* space:3000
+    reverse_proxy /spaces/* space:3000 {
+        import retry_upstream
+    }
     
     redir /god-mode /god-mode/ permanent
-    reverse_proxy /god-mode/* admin:3000
+    reverse_proxy /god-mode/* admin:3000 {
+        import retry_upstream
+    }
     
-    reverse_proxy /live/* live:3000
+    reverse_proxy /live/* live:3000 {
+        import retry_upstream
+    }
 
     # MCP (Streamable HTTP): flush immediately so SSE responses are not buffered
     reverse_proxy /mcp* mcp:3000 {
         flush_interval -1
+        import retry_upstream
     }
-    reverse_proxy /api/* api:8000
-    reverse_proxy /auth/* api:8000
-    reverse_proxy /static/* api:8000
+    reverse_proxy /api/* api:8000 {
+        import retry_upstream
+    }
+    reverse_proxy /auth/* api:8000 {
+        import retry_upstream
+    }
+    reverse_proxy /static/* api:8000 {
+        import retry_upstream
+    }
     
     reverse_proxy /{$BUCKET_NAME}/* plane-minio:9000
     reverse_proxy /{$BUCKET_NAME} plane-minio:9000
     
-    reverse_proxy /* web:3000
+    reverse_proxy /* web:3000 {
+        import retry_upstream
+    }
 }
 
 {$SITE_ADDRESS} {

@@ -113,3 +113,4 @@ from .sticky import Sticky
 from .description import Description, DescriptionVersion
 from .client_access import ClientAccessGrant
 from .module_time_budget import ModuleTimeBudget, ModuleTimeBudgetAlert
+from .project_time_budget import ProjectTimeBudget, ProjectTimeBudgetAlert

@@ -40,7 +40,7 @@ from plane.utils.filters import ComplexFilterBackend
 from plane.utils.filters import IssueFilterSet
 from .. import BaseViewSet
 from plane.utils.host import base_host
-from plane.utils.module_time_budget import check_linked_module_time_budgets
+from plane.utils.time_budget import check_linked_module_time_budgets
 
 
 class ModuleIssueViewSet(BaseViewSet):

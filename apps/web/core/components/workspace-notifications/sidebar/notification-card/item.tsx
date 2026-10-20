@@ -67,7 +67,10 @@ export const NotificationItem = observer(function NotificationItem(props: TNotif
     }
   };
 
-  if (notification.entity_name === "module" && notification.data?.module) {
+  if (
+    (notification.entity_name === "module" && notification.data?.module) ||
+    (notification.entity_name === "project" && notification.data?.project)
+  ) {
     const budget = notification.data.time_budget;
     return (
       <Row

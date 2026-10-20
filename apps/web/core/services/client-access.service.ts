@@ -25,6 +25,19 @@ export type ClientResourceDetail = ClientGrant & {
   attachments: { id: string; name: string; url: string }[];
   comments?: { id: string; html: string; author: string; created_at: string }[];
 };
+export type ClientSummary = {
+  id: string;
+  display_name: string;
+  email: string;
+  avatar_url: string | null;
+  issue_count: number;
+  page_count: number;
+};
+export type ClientListResponse = {
+  /** Set when the list is scoped to one project (project settings), null for the whole workspace. */
+  project: { id: string; name: string; identifier: string } | null;
+  clients: ClientSummary[];
+};
 export type ClientAccessResponse = {
   grants: ClientGrant[];
   resources: ClientResource[];
@@ -35,6 +48,12 @@ export type ClientAccessResponse = {
 export class ClientAccessService extends APIService {
   constructor() {
     super(API_BASE_URL);
+  }
+
+  async listClients(slug: string, projectId?: string): Promise<ClientListResponse> {
+    return (
+      await this.get(`/api/workspaces/${slug}/clients/`, { params: projectId ? { project_id: projectId } : undefined })
+    ).data;
   }
 
   async getAccess(

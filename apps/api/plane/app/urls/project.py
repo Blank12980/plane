@@ -4,6 +4,8 @@
 
 from django.urls import path
 
+from plane.app.views.project.time_budget import ProjectTimeBudgetEndpoint
+
 from plane.app.views import (
     ProjectViewSet,
     DeployBoardViewSet,
@@ -22,6 +24,11 @@ from plane.app.views import (
 
 
 urlpatterns = [
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/time-budget/",
+        ProjectTimeBudgetEndpoint.as_view(),
+        name="project-time-budget",
+    ),
     path(
         "workspaces/<str:slug>/projects/",
         ProjectViewSet.as_view({"get": "list", "post": "create"}),

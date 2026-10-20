@@ -160,6 +160,8 @@ export function summarizeProject(project: Json) {
 export function summarizeComment(comment: Json) {
   return {
     ...pick(comment, ["id", "actor", "created_at", "updated_at", "edited_at", "access"]),
+    // set on replies: the id of the comment this one answers (null for the first comment of a thread)
+    reply_to_comment_id: comment.parent ?? null,
     comment: stripHtml(comment.comment_html),
   };
 }

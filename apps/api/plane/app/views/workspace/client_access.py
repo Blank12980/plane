@@ -9,11 +9,13 @@ from django.http import HttpResponseRedirect
 from rest_framework import serializers, status
 from rest_framework.response import Response
 
+from rest_framework.exceptions import PermissionDenied
+
 from plane.app.permissions import ROLE, WorkspaceUserPermission, allow_permission
 from plane.app.views.base import BaseAPIView
 from plane.db.models import ClientAccessGrant, FileAsset, Issue, IssueComment, Page, ProjectPage, WorkspaceMember
 from plane.utils.client_access import client_grants
-from plane.utils.project_access import projects_for_user
+from plane.utils.project_access import has_project_role, is_workspace_admin, projects_for_user
 from plane.settings.storage import S3Storage
 
 
@@ -43,6 +45,69 @@ def active_grants():
     )
 
 
+def require_client_management(user, slug, project_id=None):
+    """Who may configure what a client sees.
+
+    * the whole workspace (no project given): workspace admins and instance admins;
+    * one project: the admin of that project, and every workspace/instance admin (they administer all projects).
+    A project admin therefore only ever reaches the clients' access inside the project they administer.
+    """
+    allowed = (
+        is_workspace_admin(user, slug)
+        if project_id is None
+        else has_project_role(user, slug, project_id, [ROLE.ADMIN.value])
+    )
+    if not allowed:
+        raise PermissionDenied("You are not allowed to manage client access here.")
+
+
+def optional_project_id(value):
+    return serializers.UUIDField().run_validation(value) if value else None
+
+
+class ClientListEndpoint(BaseAPIView):
+    """Clients of the workspace with a summary of what they can see (optionally inside one project)."""
+
+    permission_classes = [WorkspaceUserPermission]
+
+    def get(self, request, slug):
+        project_id = optional_project_id(request.query_params.get("project_id"))
+        require_client_management(request.user, slug, project_id)
+        project = None
+        if project_id:
+            project = get_object_or_404(
+                projects_for_user(request.user, slug).filter(archived_at__isnull=True), id=project_id
+            )
+        members = WorkspaceMember.objects.filter(
+            workspace__slug=slug, role=3, is_active=True, is_instance_admin_access=False, member__is_bot=False
+        ).select_related("member")
+        grants = active_grants().filter(workspace__slug=slug)
+        if project:
+            grants = grants.filter(project=project)
+        counts = {}
+        for client_id, issue_id, page_id in grants.values_list("client_id", "issue_id", "page_id"):
+            entry = counts.setdefault(client_id, {"issues": 0, "pages": 0})
+            entry["issues" if issue_id else "pages"] += 1
+        return Response(
+            {
+                "project": {"id": str(project.id), "name": project.name, "identifier": project.identifier}
+                if project
+                else None,
+                "clients": [
+                    {
+                        "id": str(member.member_id),
+                        "display_name": member.member.display_name,
+                        "email": member.member.email,
+                        "avatar_url": member.member.avatar_url,
+                        "issue_count": counts.get(member.member_id, {}).get("issues", 0),
+                        "page_count": counts.get(member.member_id, {}).get("pages", 0),
+                    }
+                    for member in members.order_by("member__display_name", "member__email")
+                ],
+            }
+        )
+
+
 class ClientAccessEndpoint(BaseAPIView):
     permission_classes = [WorkspaceUserPermission]
 
@@ -52,10 +117,10 @@ class ClientAccessEndpoint(BaseAPIView):
             members, workspace__slug=slug, member_id=client_id, role=3, is_active=True, is_instance_admin_access=False
         )
 
-    @allow_permission([ROLE.ADMIN], level="WORKSPACE")
     def get(self, request, slug, client_id):
+        project_id = optional_project_id(request.query_params.get("project_id"))
+        require_client_management(request.user, slug, project_id)
         self.target_client(slug, client_id)
-        project_id = request.query_params.get("project_id")
         kind = serializers.ChoiceField(choices=["issue", "page"]).run_validation(
             request.query_params.get("type", "issue")
         )
@@ -64,7 +129,6 @@ class ClientAccessEndpoint(BaseAPIView):
         projects = projects_for_user(request.user, slug).filter(archived_at__isnull=True)
         available_projects = list(projects.values("id", "name", "identifier").order_by("name"))
         if project_id:
-            project_id = serializers.UUIDField().run_validation(project_id)
             projects = projects.filter(id=project_id)
         if kind == "issue":
             resources = Issue.issue_objects.filter(project__in=projects, is_draft=False).select_related("project")
@@ -88,6 +152,8 @@ class ClientAccessEndpoint(BaseAPIView):
                 }
             )
         grants = active_grants().filter(workspace__slug=slug, client_id=client_id)
+        if project_id:
+            grants = grants.filter(project_id=project_id)
         return Response(
             {
                 "grants": [grant_data(grant) for grant in grants],
@@ -97,11 +163,16 @@ class ClientAccessEndpoint(BaseAPIView):
             }
         )
 
-    @allow_permission([ROLE.ADMIN], level="WORKSPACE")
     @transaction.atomic
     def post(self, request, slug, client_id):
+        try:
+            project_id = serializers.UUIDField().run_validation(request.data.get("project_id"))
+        except serializers.ValidationError:
+            # Malformed requests from someone who may not manage clients at all are rejected as forbidden first.
+            require_client_management(request.user, slug)
+            raise
+        require_client_management(request.user, slug, project_id)
         membership = self.target_client(slug, client_id, lock=True)
-        project_id = serializers.UUIDField().run_validation(request.data.get("project_id"))
         project = get_object_or_404(projects_for_user(request.user, slug), id=project_id, archived_at__isnull=True)
         kind = serializers.ChoiceField(choices=["issue", "page"]).run_validation(request.data.get("resource_type"))
         resource_id = serializers.UUIDField().run_validation(request.data.get("resource_id"))
@@ -126,10 +197,10 @@ class ClientAccessEndpoint(BaseAPIView):
             ClientAccessGrant.objects.filter(pk=grant.pk).update(created_by_id=request.user.id)
         return Response(grant_data(grant), status=status.HTTP_201_CREATED)
 
-    @allow_permission([ROLE.ADMIN], level="WORKSPACE")
     def delete(self, request, slug, client_id, grant_id):
-        self.target_client(slug, client_id)
         grant = get_object_or_404(ClientAccessGrant, id=grant_id, workspace__slug=slug, client_id=client_id)
+        require_client_management(request.user, slug, grant.project_id)
+        self.target_client(slug, client_id)
         grant.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 

@@ -11,4 +11,5 @@ export * from "./base";
 export * from "./email";
 export * from "./image";
 export * from "./mail";
+export * from "./mcp";
 export * from "./workspace";

@@ -12,6 +12,7 @@ from rest_framework.exceptions import AuthenticationFailed
 
 # Module imports
 from plane.db.models import APIToken
+from plane.utils.mcp import get_mcp_policy, is_mcp_request
 
 
 class APIKeyAuthentication(authentication.BaseAuthentication):
@@ -53,6 +54,9 @@ class APIKeyAuthentication(authentication.BaseAuthentication):
 
         # Validate the API token
         api_token = self.validate_api_token(token)
+        # The instance administrator can switch MCP off for everybody: neither the MCP server nor MCP tokens work then.
+        if is_mcp_request(request, api_token) and not get_mcp_policy()["enabled"]:
+            raise AuthenticationFailed("MCP is switched off by the instance administrator.")
         # Keep the token object around for workspace binding, scope checks and rate limits
         request.api_token = api_token
         return api_token.user, api_token.token

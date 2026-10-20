@@ -329,3 +329,44 @@ def test_mcp_api_does_not_bypass_workspace_client_role(workspace, issue, method,
     url = f"{base(workspace)}/{path.format(project=issue.project_id, issue=issue.id)}"
     response = getattr(client, method)(url, payload, format="json")
     assert response.status_code == 403
+
+
+class TestTimeBudgetsReadOnly:
+    """The MCP server reads the monthly limits through the public API with a read-only token."""
+
+    def test_read_scope_reads_project_and_module_budgets(self, db, workspace, project, issue, create_user):
+        from plane.db.models import Module, ModuleIssue, ModuleTimeBudget, ProjectTimeBudget
+        from plane.utils.time_budget import project_month
+
+        module = Module.objects.create(project=project, name="Hours module")
+        ModuleIssue.objects.create(project=project, module=module, issue=issue)
+        ProjectTimeBudget.objects.create(project=project, limit_minutes=600)
+        ModuleTimeBudget.objects.create(module=module, limit_minutes=120)
+        IssueWorkLog.objects.create(
+            project=project, issue=issue, logged_by=create_user, duration_minutes=90, logged_on=project_month(project)
+        )
+        client = client_for(create_user, workspace, scopes=["read"])
+
+        project_budget = client.get(f"{base(workspace)}/projects/{project.id}/time-budget/")
+        assert project_budget.status_code == status.HTTP_200_OK
+        assert project_budget.json()["limit_minutes"] == 600
+        assert project_budget.json()["total_minutes"] == 90
+        assert project_budget.json()["module_minutes"] == 90
+
+        module_budget = client.get(f"{base(workspace)}/projects/{project.id}/modules/{module.id}/time-budget/")
+        assert module_budget.status_code == status.HTTP_200_OK
+        assert module_budget.json()["limit_minutes"] == 120
+        assert module_budget.json()["reached"] is False
+
+    def test_budgets_cannot_be_changed_or_read_by_non_members(self, db, workspace, project, member, create_user):
+        client = client_for(create_user, workspace, scopes=["read", "issues:write"])
+        url = f"{base(workspace)}/projects/{project.id}/time-budget/"
+        # scoped tokens cannot use unsafe methods on views without a write scope, and the view only allows GET
+        assert client.patch(url, {"limit_minutes": 1}, format="json").status_code in (
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+        stranger = User.objects.create(email="stranger-budget@gizmo.so", username="stranger-budget")
+        WorkspaceMember.objects.create(workspace=workspace, member=stranger, role=15)
+        assert client_for(stranger, workspace, scopes=["read"]).get(url).status_code == status.HTTP_403_FORBIDDEN

@@ -3346,4 +3346,9 @@ export default {
   enter_number_of_projects: "Введите количество проектов",
   pin: "Закрепить",
   unpin: "Открепить",
+  gizmo_settings: {
+    clients: "Клиенты",
+    time_budget: "Лимит часов",
+    mcp: "MCP для агентов",
+  },
 } as const;

@@ -1,3 +1,4 @@
+import { orderBy } from "lodash-es";
 import type { TNotification } from "@plane/types";
 
 /** Keep the initial inbox quiet and never replay older unread items after reads or filter changes. */
@@ -74,5 +75,35 @@ export async function playNotificationSound() {
 export function notificationTarget(workspaceSlug: string, notification: TNotification) {
   const moduleId = notification.data?.module?.id;
   if (moduleId && notification.project) return `/${workspaceSlug}/projects/${notification.project}/modules/${moduleId}`;
+  if (notification.entity_name === "project" && notification.project)
+    return `/${workspaceSlug}/settings/projects/${notification.project}/time-budget/`;
+  const issue = notification.data?.issue;
+  if (issue?.identifier && issue.sequence_id)
+    return `/${workspaceSlug}/browse/${issue.identifier}-${issue.sequence_id}/`;
   return `/${workspaceSlug}/notifications`;
+}
+
+export const isTaskNotification = (notification: TNotification) =>
+  notification.entity_name === "issue" ||
+  notification.entity_name === "module" ||
+  notification.entity_name === "project";
+
+/** Unread, not archived and not snoozed notifications about work items (and their hour limits), newest first. */
+export function newTaskNotifications(notifications: TNotification[] | undefined, now = Date.now()): TNotification[] {
+  const unread = (notifications ?? []).filter(
+    (item) =>
+      !item.read_at &&
+      !item.archived_at &&
+      (!item.snoozed_till || new Date(item.snoozed_till).getTime() <= now) &&
+      isTaskNotification(item)
+  );
+  return orderBy(unread, (item) => item.created_at ?? "", "desc");
+}
+
+export function notificationHeadline(notification: TNotification): string {
+  if (notification.entity_name === "module" || notification.entity_name === "project")
+    return notification.title || "Достигнут лимит часов";
+  const issue = notification.data?.issue;
+  const key = issue?.identifier && issue.sequence_id ? `${issue.identifier}-${issue.sequence_id} ` : "";
+  return `${key}${issue?.name ?? notification.title ?? "Задача"}`.trim();
 }

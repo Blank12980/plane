@@ -21,6 +21,20 @@ export function ModuleTimeBudget({ workspaceSlug, projectId, moduleId, disabled 
     { refreshInterval: 30_000 }
   );
   const value = hours ?? (data?.limit_minutes ? String(data.limit_minutes / 60) : "");
+  const toggleSubtasks = async (include: boolean) => {
+    setIsSaving(true);
+    try {
+      await mutate(
+        await moduleTimeBudgetService.updateBudget(workspaceSlug, projectId, moduleId, { include_subtasks: include }),
+        false
+      );
+    } catch (error) {
+      console.error("Unable to save module time budget", error);
+      setToast({ type: TOAST_TYPE.ERROR, title: "Не удалось сохранить настройку" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
   const save = async () => {
     const minutes = value.trim() === "" ? null : Math.round(Number(value) * 60);
     if (minutes !== null && (!Number.isFinite(minutes) || minutes < 1 || minutes > 2147483647)) {
@@ -29,7 +43,10 @@ export function ModuleTimeBudget({ workspaceSlug, projectId, moduleId, disabled 
     }
     setIsSaving(true);
     try {
-      await mutate(await moduleTimeBudgetService.updateBudget(workspaceSlug, projectId, moduleId, minutes), false);
+      await mutate(
+        await moduleTimeBudgetService.updateBudget(workspaceSlug, projectId, moduleId, { limit_minutes: minutes }),
+        false
+      );
       setHours(null);
       setToast({ type: TOAST_TYPE.SUCCESS, title: minutes === null ? "Лимит отключён" : "Лимит часов сохранён" });
     } catch (error) {
@@ -43,7 +60,10 @@ export function ModuleTimeBudget({ workspaceSlug, projectId, moduleId, disabled 
   return (
     <section className="my-4 space-y-2 rounded-lg border border-subtle p-3" aria-label="Месячный лимит часов">
       <h5 className="text-14 font-medium">Месячный лимит часов</h5>
-      <p className="text-12 text-secondary">Сумма записей времени по всем задачам модуля за календарный месяц.</p>
+      <p className="text-12 text-secondary">
+        Сумма записей времени по всему, что ниже модуля: по задачам модуля и (если включено) их подзадачам, за
+        календарный месяц.
+      </p>
       {loadError ? (
         <p role="alert" className="text-12 text-danger-primary">
           Не удалось загрузить учёт часов
@@ -66,6 +86,15 @@ export function ModuleTimeBudget({ workspaceSlug, projectId, moduleId, disabled 
               max={data.limit_minutes}
             />
           )}
+          <label className="flex items-center gap-2 text-12 text-secondary">
+            <input
+              type="checkbox"
+              checked={data.include_subtasks}
+              disabled={disabled || isSaving}
+              onChange={(event) => void toggleSubtasks(event.target.checked)}
+            />
+            Учитывать подзадачи задач модуля
+          </label>
           <label htmlFor={`module-hours-${moduleId}`} className="block text-12 text-secondary">
             Лимит, часов в месяц
           </label>

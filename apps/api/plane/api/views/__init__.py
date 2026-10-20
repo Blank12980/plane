@@ -66,3 +66,4 @@ from .sticky import StickyViewSet
 from .tag import WorkspaceTagAPIEndpoint, WorkItemTagAPIEndpoint
 
 from .worklog import WorkItemWorkLogAPIEndpoint, TimeReportAPIEndpoint
+from .time_budget import ProjectTimeBudgetAPIEndpoint, ModuleTimeBudgetAPIEndpoint

@@ -110,6 +110,7 @@ class Command(BaseCommand):
                 user_type=1 if user.is_bot else 0,
                 workspace=workspace,
                 scopes=[scope for scope in API_TOKEN_SCOPES if scope in scopes],
+                source="mcp",
                 allowed_rate_limit=options["rate_limit"],
                 expired_at=timezone.now() + timedelta(days=expires_days) if expires_days > 0 else None,
             )

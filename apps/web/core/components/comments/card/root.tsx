@@ -30,6 +30,30 @@ type TCommentCard = {
   replies?: TIssueComment[];
   repliesByParent?: Record<string, TIssueComment[]>;
   depth?: number;
+  /** Display name of the author this comment answers, shown above replies. */
+  replyToName?: string;
+};
+
+/** Number of all replies below a comment, including nested ones. */
+const countThreadReplies = (
+  commentId: string,
+  repliesByParent: Record<string, TIssueComment[]>,
+  visited: Set<string> = new Set()
+): number => {
+  if (visited.has(commentId)) return 0;
+  visited.add(commentId);
+  return (repliesByParent[commentId] ?? []).reduce(
+    (total, reply) => total + 1 + countThreadReplies(reply.id, repliesByParent, visited),
+    0
+  );
+};
+
+const pluralizeReplies = (count: number) => {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${count} ответ`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} ответа`;
+  return `${count} ответов`;
 };
 
 export const CommentCard = observer(function CommentCard(props: TCommentCard) {
@@ -47,10 +71,12 @@ export const CommentCard = observer(function CommentCard(props: TCommentCard) {
     replies = [],
     repliesByParent = {},
     depth = 0,
+    replyToName,
   } = props;
   // states
   const [isEditing, setIsEditing] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
+  const [isThreadCollapsed, setIsThreadCollapsed] = useState(false);
   // refs
   const readOnlyEditorRef = useRef<EditorRefApi>(null);
   // derived values
@@ -58,9 +84,16 @@ export const CommentCard = observer(function CommentCard(props: TCommentCard) {
 
   if (!comment || !workspaceId) return null;
 
+  const threadSize = countThreadReplies(comment.id, repliesByParent);
+
   return (
     <div>
       <CommentBlock comment={comment} ends={ends}>
+        {depth > 0 && replyToName && (
+          <p className="mb-2 text-12 text-tertiary">
+            В ответ на <span className="font-medium text-secondary">{replyToName}</span>
+          </p>
+        )}
         <CommentCardDisplay
           activityOperations={activityOperations}
           entityId={entityId}
@@ -99,7 +132,11 @@ export const CommentCard = observer(function CommentCard(props: TCommentCard) {
               replyToCommentId={comment.id}
               access={comment.access}
               showToolbarInitially
-              onSubmitCallback={() => setIsReplying(false)}
+              onSubmitCallback={() => {
+                setIsReplying(false);
+                // show the new reply even if the thread was collapsed
+                setIsThreadCollapsed(false);
+              }}
             />
           </div>
         )}
@@ -111,25 +148,34 @@ export const CommentCard = observer(function CommentCard(props: TCommentCard) {
           }
           aria-label="Ветка комментариев"
         >
-          <p className="py-1 text-12 text-tertiary">Ответов: {replies.length}</p>
-          {replies.map((reply) => (
-            <CommentCard
-              key={reply.id}
-              workspaceSlug={workspaceSlug}
-              entityId={entityId}
-              projectId={projectId}
-              comment={reply}
-              activityOperations={activityOperations}
-              ends={undefined}
-              showAccessSpecifier={false}
-              showCopyLinkOption={showCopyLinkOption}
-              enableReplies={enableReplies}
-              disabled={disabled}
-              replies={repliesByParent[reply.id]}
-              repliesByParent={repliesByParent}
-              depth={depth + 1}
-            />
-          ))}
+          <button
+            type="button"
+            className="py-1 text-12 text-tertiary hover:text-secondary"
+            aria-expanded={!isThreadCollapsed}
+            onClick={() => setIsThreadCollapsed((collapsed) => !collapsed)}
+          >
+            {isThreadCollapsed ? "Показать ветку" : "Скрыть ветку"} · {pluralizeReplies(threadSize)}
+          </button>
+          {!isThreadCollapsed &&
+            replies.map((reply) => (
+              <CommentCard
+                key={reply.id}
+                workspaceSlug={workspaceSlug}
+                entityId={entityId}
+                projectId={projectId}
+                comment={reply}
+                activityOperations={activityOperations}
+                ends={undefined}
+                showAccessSpecifier={false}
+                showCopyLinkOption={showCopyLinkOption}
+                enableReplies={enableReplies}
+                disabled={disabled}
+                replies={repliesByParent[reply.id]}
+                repliesByParent={repliesByParent}
+                depth={depth + 1}
+                replyToName={comment.actor_detail?.display_name}
+              />
+            ))}
         </div>
       )}
     </div>

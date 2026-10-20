@@ -65,6 +65,7 @@ describe("tool catalogue", () => {
         "delete_work_item",
         "delete_worklog",
         "get_project",
+        "get_time_budget",
         "get_work_item",
         "list_activity",
         "list_comments",
@@ -277,6 +278,36 @@ describe("comments, tags and time", () => {
     expect(data).toMatchObject({ id: "c1", comment: "Looks good" });
   });
 
+  it("add_comment replies inside a thread when reply_to_comment_id is given", async () => {
+    const parent = "66666666-6666-4666-8666-666666666666";
+    const { client, api } = await connect({
+      [`POST ${base}/comments/`]: (c) => ({ status: 201, body: { id: "c2", ...(c.body as object) } }),
+    });
+    const { data } = await call(client, "add_comment", {
+      work_item: "WEB-12",
+      comment: "Done",
+      reply_to_comment_id: parent,
+    });
+    expect(api.calls.at(-1)?.body).toEqual({ comment_html: "<p>Done</p>", parent });
+    expect(data).toMatchObject({ id: "c2", reply_to_comment_id: parent, comment: "Done" });
+  });
+
+  it("list_comments exposes the thread of every comment", async () => {
+    const { client } = await connect({
+      [`GET ${base}/comments/`]: () => ({
+        results: [
+          { id: "c1", comment_html: "<p>Root</p>", parent: null },
+          { id: "c2", comment_html: "<p>Reply</p>", parent: "c1" },
+        ],
+      }),
+    });
+    const { data } = await call(client, "list_comments", { work_item: "WEB-12" });
+    expect(data.results.map((item: any) => [item.id, item.reply_to_comment_id])).toEqual([
+      ["c1", null],
+      ["c2", "c1"],
+    ]);
+  });
+
   it("set_work_item_tags resolves names", async () => {
     const { client, api } = await connect({
       [`PUT ${base}/tags/`]: (c) => ({ tag_ids: (c.body as any).tag_ids, tags: [{ id: TAG_ID, name: "Backend" }] }),
@@ -363,5 +394,56 @@ describe("planning tools", () => {
     const { data } = await call(client, "triage_intake", { project: "WEB", work_item: ISSUE_ID, action: "accept" });
     expect(api.calls.at(-1)?.body).toEqual({ status: 1 });
     expect(data.status).toBe(1);
+  });
+});
+
+describe("monthly hours limits", () => {
+  const MODULE_ID = "77777777-7777-4777-8777-777777777777";
+
+  it("get_time_budget reports the project limit and what counts towards it", async () => {
+    const { client } = await connect({
+      [`GET /workspaces/${WS}/projects/${PROJECT_ID}/time-budget/`]: () => ({
+        month: "2026-10-01",
+        limit_minutes: 600,
+        count_module_tasks: true,
+        count_other_tasks: false,
+        include_subtasks: true,
+        total_minutes: 450,
+        module_minutes: 450,
+        other_minutes: 90,
+        reached: false,
+      }),
+    });
+    const { data } = await call(client, "get_time_budget", { project: "WEB" });
+    expect(data).toMatchObject({
+      scope: "project",
+      month: "2026-10",
+      limit_hours: 10,
+      used_hours: 7.5,
+      remaining_hours: 2.5,
+      reached: false,
+      counts_module_tasks: true,
+      counts_other_tasks: false,
+      module_hours: 7.5,
+      other_hours: 1.5,
+    });
+  });
+
+  it("get_time_budget reads a module by name and handles a missing limit", async () => {
+    const { client } = await connect({
+      [`GET /workspaces/${WS}/projects/${PROJECT_ID}/modules/`]: () => ({
+        results: [{ id: MODULE_ID, name: "Billing" }],
+      }),
+      [`GET /workspaces/${WS}/projects/${PROJECT_ID}/modules/${MODULE_ID}/time-budget/`]: () => ({
+        month: "2026-10-01",
+        limit_minutes: null,
+        include_subtasks: true,
+        total_minutes: 90,
+        reached: false,
+      }),
+    });
+    const { data } = await call(client, "get_time_budget", { project: "WEB", module: "Billing" });
+    expect(data).toMatchObject({ scope: "module", limit_hours: null, remaining_hours: null, used_hours: 1.5 });
+    expect(data.counts_module_tasks).toBeUndefined();
   });
 });

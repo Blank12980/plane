@@ -39,6 +39,13 @@ def default_token_scopes():
     return []
 
 
+# Where a token was created. MCP tokens are created in the profile settings (or by the create_agent_token command)
+# and are governed by the instance wide MCP policy in God Mode.
+API_TOKEN_SOURCE_API = "api"
+API_TOKEN_SOURCE_MCP = "mcp"
+API_TOKEN_SOURCES = ((API_TOKEN_SOURCE_API, "API"), (API_TOKEN_SOURCE_MCP, "MCP"))
+
+
 class APIToken(BaseModel):
     # Meta information
     label = models.CharField(max_length=255, default=generate_label_token)
@@ -57,6 +64,7 @@ class APIToken(BaseModel):
     is_service = models.BooleanField(default=False)
     allowed_rate_limit = models.CharField(max_length=255, default="60/min")
     scopes = models.JSONField(default=default_token_scopes, blank=True)
+    source = models.CharField(max_length=16, choices=API_TOKEN_SOURCES, default=API_TOKEN_SOURCE_API, db_index=True)
 
     class Meta:
         verbose_name = "API Token"

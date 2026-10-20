@@ -21,7 +21,7 @@ import { CommonOnboardingHeader } from "../common";
 import type { TProfileSetupFormValues } from "../profile/root";
 
 type Props = {
-  handleStepChange: (step: EOnboardingSteps, skipInvites?: boolean) => void;
+  handleStepChange: (step: EOnboardingSteps) => void;
 };
 
 const defaultValues = {
@@ -86,7 +86,10 @@ export const UseCaseSetupStep = observer(function UseCaseSetupStep({ handleStepC
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-10">
       {/* Header */}
-      <CommonOnboardingHeader title="Что привело вас в Gizmo?" description="Расскажите о ваших целях и размере команды." />
+      <CommonOnboardingHeader
+        title="Что привело вас в Gizmo?"
+        description="Расскажите о ваших целях и размере команды."
+      />
 
       {/* Use Case Selection */}
       <div className="flex flex-col gap-3">

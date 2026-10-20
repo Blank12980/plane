@@ -6,7 +6,7 @@
 
 import type React from "react";
 import type { LucideIcon } from "lucide-react";
-import { Activity, Bell, CircleUser, KeyRound, LockIcon, Settings2 } from "lucide-react";
+import { Activity, Bell, Bot, CircleUser, KeyRound, LockIcon, Settings2 } from "lucide-react";
 import { observer } from "mobx-react";
 import { useParams } from "react-router";
 // gizmo imports
@@ -25,6 +25,7 @@ const ICONS: Record<TProfileSettingsTabs, LucideIcon | React.FC<ISvgIcons>> = {
   preferences: Settings2,
   notifications: Bell,
   "api-tokens": KeyRound,
+  mcp: Bot,
 };
 
 type Props = {

@@ -24,12 +24,11 @@ import { CommonOnboardingHeader } from "../common";
 type Props = {
   invitations: IWorkspaceMemberInvitation[];
   handleNextStep: () => Promise<void>;
-  handleCurrentViewChange: () => void;
 };
 const workspaceService = new WorkspaceService();
 
 export function WorkspaceJoinInvitesStep(props: Props) {
-  const { invitations, handleNextStep, handleCurrentViewChange } = props;
+  const { invitations, handleNextStep } = props;
   // states
   const [isJoiningWorkspaces, setIsJoiningWorkspaces] = useState(false);
   const [invitationsRespond, setInvitationsRespond] = useState<string[]>([]);
@@ -68,8 +67,8 @@ export function WorkspaceJoinInvitesStep(props: Props) {
   return invitations && invitations.length > 0 ? (
     <div className="flex flex-col gap-10">
       <CommonOnboardingHeader
-        title="Примите приглашения или создайте рабочее пространство"
-        description="Вся ваша работа — в одном месте."
+        title="Вас пригласили в рабочее пространство"
+        description="Примите приглашение, чтобы начать работу, или сделайте это позже на главной."
       />
       <div className="flex flex-col gap-3">
         {invitations &&
@@ -111,21 +110,10 @@ export function WorkspaceJoinInvitesStep(props: Props) {
         >
           {isJoiningWorkspaces ? <Spinner height="20px" width="20px" /> : "Продолжить"}
         </Button>
-        <Button
-          variant="ghost"
-          size="xl"
-          className="w-full"
-          onClick={handleCurrentViewChange}
-          disabled={isJoiningWorkspaces}
-        >
-          Создать новое рабочее пространство
-        </Button>
         <Button variant="ghost" size="xl" onClick={handleNextStep} disabled={isJoiningWorkspaces}>
-          Продолжить без рабочего пространства
+          Пропустить
         </Button>
       </div>
     </div>
-  ) : (
-    <div>Приглашений не найдено</div>
-  );
+  ) : null;
 }

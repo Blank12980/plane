@@ -5,7 +5,7 @@
  */
 
 import type { LucideIcon } from "lucide-react";
-import { Users, Zap } from "lucide-react";
+import { Briefcase, Clock, Users, Zap } from "lucide-react";
 // gizmo imports
 import type { ISvgIcons } from "@plane/propel/icons";
 import {
@@ -34,4 +34,6 @@ export const PROJECT_SETTINGS_ICONS: Record<TProjectSettingsTabs, LucideIcon | R
   labels: LabelPropertyIcon,
   estimates: EstimatePropertyIcon,
   automations: Zap,
+  clients: Briefcase,
+  time_budget: Clock,
 };

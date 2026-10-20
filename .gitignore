@@ -110,3 +110,6 @@ build/
 .react-router/
 temp/
 scripts/
+
+# setup.sh rollout lock
+.setup.lock

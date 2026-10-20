@@ -38,6 +38,8 @@ class APITokenSerializer(BaseSerializer):
             # Rate limit and service flag are set by instance admins only
             "allowed_rate_limit",
             "is_service",
+            # MCP tokens are created through the dedicated MCP endpoints so that the instance policy applies
+            "source",
         ]
 
     def validate_scopes(self, value):

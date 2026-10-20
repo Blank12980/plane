@@ -12,13 +12,31 @@ import { EModalPosition, EModalWidth, ModalCore } from "@plane/ui";
 import { clientAccessService } from "@/services/client-access.service";
 import type { ClientResource } from "@/services/client-access.service";
 
-type Props = { isOpen: boolean; onClose: () => void; workspaceSlug: string; clientId: string; clientName: string };
+type Props = {
+  isOpen: boolean;
+  onClose: () => void;
+  workspaceSlug: string;
+  clientId: string;
+  clientName: string;
+  /** Limits everything (the shown access and the pickable resources) to one project, e.g. in project settings. */
+  fixedProjectId?: string;
+  onChanged?: () => void;
+};
 
-export function ClientAccessModal({ isOpen, onClose, workspaceSlug, clientId, clientName }: Props) {
+export function ClientAccessModal({
+  isOpen,
+  onClose,
+  workspaceSlug,
+  clientId,
+  clientName,
+  fixedProjectId,
+  onChanged,
+}: Props) {
   const [type, setType] = useState<"issue" | "page">("issue");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [projectId, setProjectId] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const projectId = fixedProjectId ?? selectedProjectId;
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
   const { data, error, isLoading, mutate } = useSWR(
@@ -33,6 +51,7 @@ export function ClientAccessModal({ isOpen, onClose, workspaceSlug, clientId, cl
       if (grantId) await clientAccessService.revoke(workspaceSlug, clientId, grantId);
       else await clientAccessService.grant(workspaceSlug, clientId, resource);
       await mutate();
+      onChanged?.();
     } catch (operationError: unknown) {
       console.error("Failed to update client access", operationError);
       setToast({ type: TOAST_TYPE.ERROR, title: "Не удалось изменить доступ", message: "Попробуйте ещё раз." });
@@ -47,8 +66,8 @@ export function ClientAccessModal({ isOpen, onClose, workspaceSlug, clientId, cl
         <div>
           <h2 className="text-20 font-semibold">Доступ клиента: {clientName}</h2>
           <p className="mt-2 text-13 text-secondary">
-            Выберите отдельные задачи и страницы. Клиент сможет только просматривать их. Остальное содержимое проектов
-            останется скрытым.
+            Выберите отдельные задачи и страницы{fixedProjectId ? " этого проекта" : ""}. Клиент сможет только
+            просматривать их. Остальное содержимое проектов останется скрытым.
           </p>
         </div>
         <section className="space-y-2">
@@ -95,22 +114,24 @@ export function ClientAccessModal({ isOpen, onClose, workspaceSlug, clientId, cl
               <option value="issue">Задачи</option>
               <option value="page">Страницы</option>
             </select>
-            <select
-              aria-label="Проект"
-              value={projectId}
-              onChange={(event) => {
-                setProjectId(event.target.value);
-                setPage(1);
-              }}
-              className="max-w-48 rounded border border-subtle bg-surface-1 p-2 text-13"
-            >
-              <option value="">Все проекты</option>
-              {data?.projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
+            {!fixedProjectId && (
+              <select
+                aria-label="Проект"
+                value={selectedProjectId}
+                onChange={(event) => {
+                  setSelectedProjectId(event.target.value);
+                  setPage(1);
+                }}
+                className="max-w-48 rounded border border-subtle bg-surface-1 p-2 text-13"
+              >
+                <option value="">Все проекты</option>
+                {data?.projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               aria-label="Поиск по названию"
               value={searchInput}

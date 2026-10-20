@@ -4,6 +4,7 @@
 
 from django.urls import path
 from plane.app.views import ApiTokenEndpoint
+from plane.app.views.user.mcp import UserMcpEndpoint, UserMcpTokenEndpoint
 
 urlpatterns = [
     # API Tokens
@@ -18,4 +19,8 @@ urlpatterns = [
         name="api-tokens-details",
     ),
     ## End API Tokens
+    # MCP: connect an AI agent on behalf of the signed-in user
+    path("users/me/mcp/", UserMcpEndpoint.as_view(), name="user-mcp"),
+    path("users/me/mcp/tokens/", UserMcpTokenEndpoint.as_view(), name="user-mcp-tokens"),
+    path("users/me/mcp/tokens/<uuid:pk>/", UserMcpTokenEndpoint.as_view(), name="user-mcp-token-detail"),
 ]

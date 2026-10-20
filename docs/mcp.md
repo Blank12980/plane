@@ -11,6 +11,19 @@
   уходит в API как `X-Api-Key`. В API добавляется заголовок `X-Mcp-Tool: <имя инструмента>`,
   он попадает в журнал `APIActivityLog` (поле `headers`).
 
+## 0. Быстрый старт для пользователя
+
+1. Откройте **Настройки профиля → MCP для агентов** (раздел «Разработчик»).
+2. Выберите пространство и набор прав («Только чтение», «Помощник», «Планирование» или свой), срок действия.
+3. Нажмите **Создать токен** и скопируйте его. Токен показывается один раз.
+4. Выберите свой клиент (Cursor, Claude Code, VS Code, Claude Desktop). Настройка уже содержит адрес сервера,
+   токен и пространство. Вставьте её в файл конфигурации или выполните команду.
+5. Проверка: попросите агента «кто я в Gizmo» (инструмент `whoami`) или выполните готовую команду `curl`.
+
+Токен создаётся **от вашего имени**: агент работает с вашими правами и никогда не получает больше, чем у вас
+есть в Gizmo. Правила создания токенов (допустимые права, срок, лимит запросов) задаёт администратор экземпляра.
+Если MCP выключен или самостоятельные токены запрещены, страница объясняет это и не даёт создать токен.
+
 ## 1. Токен для агента
 
 Рекомендуемая схема: **у каждого агента свой бот-пользователь и свой токен**, привязанный к
@@ -151,12 +164,13 @@ curl -s https://plane.example.com/mcp \
 |            | `create_work_item`, `update_work_item`, `set_deadline`                                        | issues:write          |
 |            | `delete_work_item` (destructive, требует `confirm: true`)                                     | issues:delete         |
 | Обсуждение | `list_comments`, `list_activity`                                                              | read                  |
-|            | `add_comment`, `update_comment`                                                               | comments:write        |
+|            | `add_comment` (с `reply_to_comment_id` — ответ в ветке), `update_comment`                     | comments:write        |
 |            | `add_link`                                                                                    | issues:write          |
 | Циклы      | `list_cycles` / `create_cycle`, `add_work_items_to_cycle`, `transfer_cycle_work_items`        | read / cycles:write   |
 | Модули     | `list_modules` / `add_work_items_to_module`                                                   | read / modules:write  |
 | Intake     | `list_intake` / `triage_intake`                                                               | read / intake:write   |
 | Теги       | `list_tags` / `create_tag`, `set_work_item_tags`                                              | read / tags:write     |
+| Лимиты     | `get_time_budget` (месячный лимит часов проекта или модуля и сколько уже использовано)        | read                  |
 | Время      | `list_worklogs`, `time_report` / `log_time`, `update_worklog`, `delete_worklog` (destructive) | read / worklogs:write |
 
 У инструментов есть аннотации `readOnlyHint` / `destructiveHint`, клиенты используют их для
@@ -167,6 +181,13 @@ curl -s https://plane.example.com/mcp \
 
 Промпты: `triage_inbox`, `daily_standup`, `plan_cycle`, `summarize_work_item`, `log_my_day`.
 
+### Ветки комментариев
+
+`list_comments` возвращает у каждого комментария поле `reply_to_comment_id` (у ответов это id комментария, на который
+отвечают, у первого комментария ветки — `null`), поэтому ветку можно собрать целиком. `add_comment` с
+`reply_to_comment_id` создаёт ответ: он попадает в ту же ветку и наследует видимость корневого комментария.
+Автор исходного комментария получает уведомление об ответе.
+
 ### Новые эндпоинты публичного API
 
 Добавлены для MCP, доступны и обычным интеграциям:
@@ -175,6 +196,8 @@ curl -s https://plane.example.com/mcp \
 - `GET|PUT /api/v1/workspaces/{slug}/projects/{project_id}/work-items/{id}/tags/` — `{"tag_ids": [...]}`
 - `GET|POST .../work-items/{id}/worklogs/`, `PATCH|DELETE .../worklogs/{worklog_id}/` —
   через публичный API можно менять и удалять только свои записи (админы правят чужие в приложении)
+- `GET /api/v1/workspaces/{slug}/projects/{project_id}/time-budget/` и
+  `GET .../projects/{project_id}/modules/{module_id}/time-budget/` — месячный лимит часов и расход (только чтение)
 - `GET /api/v1/workspaces/{slug}/time-report/?date_from&date_to&project_id&issue_id&user_id=me&group_by=user|issue|project|day`
 
 ## 4. Безопасность
@@ -192,8 +215,35 @@ curl -s https://plane.example.com/mcp \
 - Удаление задач — только со скоупом `issues:delete` и `confirm: true`.
 - Списывать время за других через API нельзя.
 - Мессенджер и отправка почты через MCP не реализованы (отложено).
+- Администратор может выключить MCP целиком или отозвать любой токен в God Mode (раздел 5).
 
-## 5. Деплой и настройка
+## 5. Управление MCP в God Mode
+
+Страница **God Mode → MCP для AI-агентов** (доступна администраторам экземпляра):
+
+- **Обзор и политика**: состояние контейнера MCP (health), адрес для подключения, главный выключатель, числа
+  (токены, использованные за 24 часа, вызовы и ошибки, частые инструменты) и правила для токенов, которые
+  пользователи создают сами:
+  - разрешить пользователям создавать токены в профиле;
+  - допустимые права токена (право `read` обязательно; `issues:delete` по умолчанию не разрешено);
+  - максимальный срок токена в днях (0 — без ограничения; без явного срока токен получает этот максимум);
+  - лимит запросов токена (формат `120/min`); пользователь его не меняет.
+- **Токены**: все MCP-токены экземпляра (владелец, пространство, права, последнее использование, срок). Токен можно
+  отозвать, вернуть в работу или удалить. Секрет в списке не показывается.
+- **Журнал вызовов**: последние вызовы инструментов за 7 дней (инструмент, статус, время). Работает, пока журнал
+  запросов API хранится в PostgreSQL; токены и тела запросов не показываются.
+- **Руководство**: как это работает, настройки клиентов, список прав и инструментов, правила безопасности.
+
+Главный выключатель действует на стороне API: при выключенном MCP запросы с MCP-токена и запросы от MCP-сервера
+(заголовок `X-Mcp-Tool`) получают отказ с пояснением. Обычные API-токены продолжают работать для своих интеграций.
+Настройки кэшируются на несколько секунд. Правила применяются при создании токена; уже созданные токены
+администратор отзывает вручную.
+
+API управления: `GET|PATCH /api/instances/mcp/`, `GET /api/instances/mcp/tokens/`,
+`PATCH|DELETE /api/instances/mcp/tokens/{id}/`, `GET /api/instances/mcp/activity/`. Для пользователя:
+`GET /api/users/me/mcp/`, `POST /api/users/me/mcp/tokens/`, `DELETE /api/users/me/mcp/tokens/{id}/`.
+
+## 6. Деплой и настройка
 
 Сервис `mcp` в `docker-compose.yml` (образ `apps/mcp/Dockerfile.mcp`, собирается `setup.sh` /
 `setup.ps1`). Caddy проксирует `/mcp*` на `mcp:3000` с `flush_interval -1`, в nginx для `/mcp`
@@ -213,11 +263,13 @@ curl -s https://plane.example.com/mcp \
 | `API_TIMEOUT_MS`         | `20000`           | таймаут запроса к API                                            |
 
 После обновления примените миграции (`0133_apitoken_scopes`) — это делает контейнер `migrator`.
-Миграция `0134_merge_apitoken_scopes_revoke_admin_access` объединяет её с изменениями прав
+Миграции `0138_time_budget_scopes` (лимиты часов), `0139_apitoken_source` (признак MCP-токена) и
+`license.0008_mcpsettings` (политика MCP) добавляют только новые таблицы и поля, поэтому старая версия кода работает с
+ними во время бесшовной выкатки. Миграция `0134_merge_apitoken_scopes_revoke_admin_access` объединяет её с изменениями прав
 администраторов, а `0137_merge_mcp_and_client_updates` объединяет с миграциями роли Client,
 лимитов времени модулей и ответов на комментарии. Применяйте весь граф через `manage.py migrate`.
 
-## 6. Разработка
+## 7. Разработка
 
 ```bash
 pnpm --filter mcp dev      # сборка в watch-режиме и запуск, читает apps/mcp/.env

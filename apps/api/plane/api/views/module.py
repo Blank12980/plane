@@ -712,7 +712,7 @@ class ModuleIssueListCreateAPIEndpoint(BaseAPIView):
 
         ModuleIssue.objects.bulk_update(records_to_update, ["module"], batch_size=10)
 
-        from plane.utils.module_time_budget import check_linked_module_time_budgets
+        from plane.utils.time_budget import check_linked_module_time_budgets
 
         check_linked_module_time_budgets([module.id])
 

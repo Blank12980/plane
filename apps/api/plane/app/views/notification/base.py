@@ -34,7 +34,7 @@ def visible_notifications(user, slug):
     return Notification.objects.filter(
         workspace__slug=slug,
         receiver_id=user.id,
-        entity_name__in=["issue", "module"],
+        entity_name__in=["issue", "module", "project"],
         project_id__in=projects_for_user(user, slug).values("pk"),
     )
 

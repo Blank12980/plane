@@ -273,3 +273,123 @@ def test_client_cannot_join_collaboration_for_a_shared_page(workspace, client_sc
         f"/api/workspaces/{workspace.slug}/projects/{project.id}/pages/{pages[0].id}/collaboration-access/"
     )
     assert response.status_code == 403
+
+
+# -- who may configure the clients -------------------------------------------------------------------------------
+
+
+def clients_url(workspace):
+    return f"/api/workspaces/{workspace.slug}/clients/"
+
+
+def user_client(user):
+    browser = APIClient()
+    browser.force_authenticate(user=user)
+    return browser
+
+
+@pytest.fixture
+def two_projects(workspace, create_user, client_scope):
+    """`project_admin` administers the shared project only; a second private project has its own task and grant."""
+    client, _, project, issues, pages, _ = client_scope
+    project_admin = User.objects.create_user(email="project-admin@example.com", username="project-admin")
+    WorkspaceMember.objects.create(workspace=workspace, member=project_admin, role=15)
+    ProjectMember.objects.create(project=project, member=project_admin, role=20)
+    other = Project.objects.create(workspace=workspace, name="Private project", identifier="PRV", network=0)
+    ProjectMember.objects.create(project=other, member=create_user, role=20)
+    other_issue = Issue.objects.bulk_create(
+        [Issue(project=other, workspace=workspace, name="Private task", sequence_id=1)]
+    )[0]
+    own_grant = ClientAccessGrant.objects.create(workspace=workspace, project=project, client=client, issue=issues[0])
+    other_grant = ClientAccessGrant.objects.create(workspace=workspace, project=other, client=client, issue=other_issue)
+    return client, project_admin, project, other, own_grant, other_grant
+
+
+def test_project_admin_manages_clients_of_their_project_only(workspace, two_projects):
+    client, project_admin, project, other, own_grant, other_grant = two_projects
+    browser = user_client(project_admin)
+
+    listing = browser.get(clients_url(workspace), {"project_id": str(project.id)})
+    assert listing.status_code == 200, listing.data
+    assert listing.json()["project"]["id"] == str(project.id)
+    assert [(item["id"], item["issue_count"]) for item in listing.json()["clients"]] == [(str(client.id), 1)]
+
+    access = browser.get(grant_url(workspace, client), {"project_id": str(project.id)})
+    assert access.status_code == 200
+    assert [grant["id"] for grant in access.json()["grants"]] == [str(own_grant.id)]
+    assert [item["id"] for item in access.json()["projects"]] == [str(project.id)]
+
+    # nothing beyond the administered project
+    assert browser.get(clients_url(workspace)).status_code == 403
+    assert browser.get(grant_url(workspace, client)).status_code == 403
+    assert browser.get(clients_url(workspace), {"project_id": str(other.id)}).status_code == 403
+    assert browser.get(grant_url(workspace, client), {"project_id": str(other.id)}).status_code == 403
+
+
+def test_project_admin_grants_and_revokes_inside_their_project_only(workspace, two_projects, client_scope):
+    client, project_admin, project, other, own_grant, other_grant = two_projects
+    _, _, _, issues, pages, _ = client_scope
+    browser = user_client(project_admin)
+
+    created = browser.post(
+        grant_url(workspace, client),
+        {"resource_type": "page", "resource_id": str(pages[0].id), "project_id": str(project.id)},
+        format="json",
+    )
+    assert created.status_code == 201, created.data
+
+    outside = browser.post(
+        grant_url(workspace, client),
+        {"resource_type": "issue", "resource_id": str(other_grant.issue_id), "project_id": str(other.id)},
+        format="json",
+    )
+    assert outside.status_code == 403
+
+    assert browser.delete(grant_url(workspace, client) + f"{other_grant.id}/").status_code == 403
+    assert ClientAccessGrant.objects.filter(pk=other_grant.pk).exists()
+    assert browser.delete(grant_url(workspace, client) + f"{own_grant.id}/").status_code == 204
+    assert not ClientAccessGrant.objects.filter(pk=own_grant.pk).exists()
+
+
+def test_workspace_admin_sees_workspace_and_every_project(session_client, workspace, two_projects):
+    client, _, project, other, *_ = two_projects
+    everything = session_client.get(clients_url(workspace))
+    assert everything.status_code == 200
+    assert everything.json()["project"] is None
+    assert everything.json()["clients"][0]["issue_count"] == 2
+    for scoped in (project, other):
+        listing = session_client.get(clients_url(workspace), {"project_id": str(scoped.id)})
+        assert listing.status_code == 200
+        assert listing.json()["clients"][0]["issue_count"] == 1
+
+
+def test_instance_admin_manages_clients_in_every_workspace_and_project(workspace, two_projects):
+    from django.utils import timezone
+
+    from plane.license.models import Instance, InstanceAdmin
+
+    client, _, project, other, *_ = two_projects
+    superuser = User.objects.create_user(email="instance-admin@example.com", username="instance-admin")
+    instance = Instance.objects.create(
+        instance_name="Clients instance",
+        instance_id="clients-instance",
+        current_version="test",
+        last_checked_at=timezone.now(),
+    )
+    InstanceAdmin.objects.create(instance=instance, user=superuser, role=20)
+    browser = user_client(superuser)
+    assert browser.get(clients_url(workspace)).status_code == 200
+    for scoped in (project, other):
+        assert browser.get(clients_url(workspace), {"project_id": str(scoped.id)}).status_code == 200
+
+
+def test_plain_members_guests_and_clients_cannot_open_client_settings(workspace, two_projects):
+    client, _, project, *_ = two_projects
+    for role in (15, 5):
+        user = User.objects.create_user(email=f"role-{role}@example.com", username=f"role-{role}")
+        WorkspaceMember.objects.create(workspace=workspace, member=user, role=role)
+        ProjectMember.objects.create(project=project, member=user, role=role)
+        browser = user_client(user)
+        assert browser.get(clients_url(workspace), {"project_id": str(project.id)}).status_code == 403
+        assert browser.get(clients_url(workspace)).status_code == 403
+    assert user_client(client).get(clients_url(workspace), {"project_id": str(project.id)}).status_code == 403

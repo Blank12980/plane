@@ -14,7 +14,7 @@ vi.mock("@/services/module-time-budget.service", () => ({ moduleTimeBudgetServic
 vi.mock("@plane/propel/toast", () => ({ TOAST_TYPE: { SUCCESS: "success", ERROR: "error" }, setToast: toast }));
 let root: Root;
 let container: HTMLDivElement;
-const budget = { month: "2026-10-01", limit_minutes: 600, total_minutes: 600, reached: true };
+const budget = { month: "2026-10-01", limit_minutes: 600, include_subtasks: true, total_minutes: 600, reached: true };
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
@@ -39,7 +39,7 @@ async function render(disabled = false) {
   );
 }
 async function change(value: string) {
-  const input = container.querySelector("input")!;
+  const input = container.querySelector<HTMLInputElement>("input[type=number]")!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -50,17 +50,18 @@ test("shows threshold and saves hours as minutes", async () => {
   expect(container.textContent).toContain("лимит достигнут");
   await change("12.5");
   await act(async () => container.querySelector("button")!.click());
-  expect(updateBudget).toHaveBeenCalledWith("space", "project", "module", 750);
+  expect(updateBudget).toHaveBeenCalledWith("space", "project", "module", { limit_minutes: 750 });
 });
 test("empty limit disables notifications", async () => {
   await render();
   await change("");
   await act(async () => container.querySelector("button")!.click());
-  expect(updateBudget).toHaveBeenCalledWith("space", "project", "module", null);
+  expect(updateBudget).toHaveBeenCalledWith("space", "project", "module", { limit_minutes: null });
 });
 test("read only modules cannot change limits", async () => {
   await render(true);
-  expect(container.querySelector("input")!.disabled).toBe(true);
+  expect(container.querySelector<HTMLInputElement>("input[type=number]")!.disabled).toBe(true);
+  expect(container.querySelector<HTMLInputElement>("input[type=checkbox]")!.disabled).toBe(true);
   expect(container.querySelector("button")!.disabled).toBe(true);
 });
 test("rejected save keeps entered limit and reports error", async () => {
@@ -69,7 +70,14 @@ test("rejected save keeps entered limit and reports error", async () => {
   await render();
   await change("15");
   await act(async () => container.querySelector("button")!.click());
-  expect(container.querySelector("input")!.value).toBe("15");
+  expect(container.querySelector<HTMLInputElement>("input[type=number]")!.value).toBe("15");
   expect(toast).toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
   log.mockRestore();
+});
+test("subtask switch is saved on its own", async () => {
+  await render();
+  const checkbox = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+  expect(checkbox.checked).toBe(true);
+  await act(async () => checkbox.click());
+  expect(updateBudget).toHaveBeenCalledWith("space", "project", "module", { include_subtasks: false });
 });

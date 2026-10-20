@@ -4,6 +4,7 @@
 
 from django.urls import path
 from plane.app.views.workspace.client_access import (
+    ClientListEndpoint,
     ClientAccessEndpoint,
     ClientResourcesEndpoint,
     ClientResourceAssetEndpoint,
@@ -51,6 +52,7 @@ urlpatterns = [
         ClientResourceAssetEndpoint.as_view(),
         name="client-resource-file",
     ),
+    path("workspaces/<str:slug>/clients/", ClientListEndpoint.as_view(), name="client-list"),
     path(
         "workspaces/<str:slug>/clients/<uuid:client_id>/access/", ClientAccessEndpoint.as_view(), name="client-access"
     ),

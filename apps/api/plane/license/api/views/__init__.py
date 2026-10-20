@@ -35,3 +35,4 @@ from .mailbox import (
     MailConfigEndpoint,
 )
 from .user import InstanceUserEndpoint, InstanceUserPasswordEndpoint
+from .mcp import McpSettingsEndpoint, McpTokensEndpoint, McpActivityEndpoint

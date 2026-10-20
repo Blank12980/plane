@@ -365,84 +365,302 @@ function install_plane() {
     echo ""
 }
 
-function start_services() {
-    initialize_local_env_files
-    build_local_images false
+# ---------------------------------------------------------------------------
+# Zero-downtime rollout
+# ---------------------------------------------------------------------------
+# `./setup.sh start|restart` never takes the tracker down while it builds:
+#
+#   1. every image is built first - the running version keeps serving traffic;
+#   2. database migrations run with the NEW image against the live database
+#      (keep migrations backward compatible: the old code still runs for the
+#      duration of the rollout);
+#   3. each stateless service is replaced one by one: the new container is
+#      started NEXT TO the old one, we wait for its healthcheck and only then
+#      stop the old one. Both containers carry the same compose service name,
+#      so Docker DNS (and therefore the proxy) spreads requests across them
+#      during the overlap; a container that does not listen yet refuses the
+#      connection and the dialer falls through to the healthy one;
+#   4. database / redis / rabbitmq / minio are never recreated, the proxy is
+#      recreated only when its own image or config changed (~1 second).
+#
+# If a new container never becomes healthy it is removed again, the old one
+# keeps serving and the script exits with an error - a broken build cannot take
+# the site down. Use `./setup.sh hard-restart` for a full stop/start (downtime).
+ROLLING_SERVICES=(api worker live mcp web admin space)
+SINGLETON_SERVICES=(beat-worker)
+INFRA_SERVICES=(plane-db plane-redis plane-mq plane-minio)
+SERVICE_READY_TIMEOUT="${SERVICE_READY_TIMEOUT:-300}"
+OLD_CONTAINER_STOP_TIMEOUT="${OLD_CONTAINER_STOP_TIMEOUT:-30}"
 
-    run_compose $(compose_base_args) up -d --no-build --force-recreate
-    if [[ $LAST_COMPOSE_EXIT_CODE -ne 0 ]]; then
-        exit $LAST_COMPOSE_EXIT_CODE
+# Like run_compose, but returns the exit status instead of aborting the script.
+function compose_try() {
+    (
+        cd "$REPO_ROOT" || exit 1
+        if [[ "$COMPOSE_CMD" == "docker compose" ]]; then
+            docker compose $(compose_base_args) "$@"
+        else
+            docker-compose $(compose_base_args) "$@"
+        fi
+    )
+}
+
+# IDs of every container (running or not) that belongs to a compose service.
+function service_container_ids() {
+    compose_try ps -aq "$1" 2>/dev/null | sort -u
+}
+
+function container_state() {
+    docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$1" 2>/dev/null || echo "gone"
+}
+
+function container_restart_count() {
+    docker inspect -f '{{.RestartCount}}' "$1" 2>/dev/null || echo "0"
+}
+
+function clear_progress_line() {
+    printf "\r%*s\r" 70 ""
+}
+
+# Returns 0 once the container is healthy (or, for services without a
+# healthcheck, has been up for 10 seconds without restarting).
+function wait_container_ready() {
+    local id="$1" label="$2"
+    local start now state running_since="" restarts_at_start="" idx=0
+    start=$(date +%s)
+
+    while true; do
+        state=$(container_state "$id")
+        now=$(date +%s)
+        case "$state" in
+            healthy)
+                clear_progress_line
+                return 0
+                ;;
+            running)
+                if [[ -z "$running_since" ]]; then
+                    running_since=$now
+                    restarts_at_start=$(container_restart_count "$id")
+                elif [[ "$(container_restart_count "$id")" != "$restarts_at_start" ]]; then
+                    clear_progress_line
+                    return 1
+                elif (( now - running_since >= 10 )); then
+                    clear_progress_line
+                    return 0
+                fi
+                ;;
+            exited|dead|gone|unhealthy|restarting)
+                clear_progress_line
+                return 1
+                ;;
+        esac
+
+        if (( now - start > SERVICE_READY_TIMEOUT )); then
+            clear_progress_line
+            return 1
+        fi
+
+        printf "\r>> Waiting for %s to become ready (%ss)%s" "$label" "$((now - start))" "$(printf '%*s' "$((idx % 4))" | tr ' ' '.')"
+        idx=$((idx + 1))
+        sleep 2
+    done
+}
+
+function discard_containers() {
+    [[ $# -eq 0 ]] && return 0
+    docker rm -f "$@" >/dev/null 2>&1 || true
+}
+
+function show_container_logs() {
+    echo ""
+    echo "   ---- last log lines of the container that failed to start ----"
+    docker logs --tail 40 "$1" 2>&1 | sed 's/^/   | /'
+    echo "   ----------------------------------------------------------------"
+}
+
+function rollout_failed() {
+    local svc="$1"
+    echo ""
+    echo "   Rollout of '${svc}' failed. The previous version is still serving traffic."
+    echo "   Check the service with: ./setup.sh logs ${svc}"
+    exit 1
+}
+
+# Replace one stateless service without a gap: new container up and healthy
+# first, old container stopped afterwards.
+function roll_service() {
+    local svc="$1"
+    local old_ids new_ids count id
+
+    old_ids=$(service_container_ids "$svc")
+
+    if [[ -z "$old_ids" ]]; then
+        echo "   Starting ${svc}..."
+        compose_try up -d --no-deps --no-build "$svc" >/dev/null 2>&1 || return 1
+        new_ids=$(service_container_ids "$svc")
+        for id in $new_ids; do
+            if ! wait_container_ready "$id" "$svc"; then
+                show_container_logs "$id"
+                discard_containers $new_ids
+                return 1
+            fi
+        done
+        return 0
     fi
+
+    count=$(echo "$old_ids" | wc -l | tr -d ' ')
+    echo "   Rolling ${svc}: starting the new container next to the current one..."
+    compose_try up -d --no-deps --no-build --no-recreate --scale "${svc}=$((count + 1))" "$svc" >/dev/null 2>&1 || return 1
+
+    new_ids=$(comm -13 <(echo "$old_ids" | sort) <(service_container_ids "$svc" | sort))
+    if [[ -z "$new_ids" ]]; then
+        echo "   No new container was created for ${svc}."
+        return 1
+    fi
+
+    for id in $new_ids; do
+        if ! wait_container_ready "$id" "$svc"; then
+            show_container_logs "$id"
+            discard_containers $new_ids
+            return 1
+        fi
+    done
+
+    echo "   ${svc}: new version is healthy, retiring the old container"
+    docker stop -t "$OLD_CONTAINER_STOP_TIMEOUT" $old_ids >/dev/null 2>&1 || true
+    discard_containers $old_ids
+    # Normalise the replica count (the surviving container keeps its number).
+    compose_try up -d --no-deps --no-build --no-recreate --scale "${svc}=${count}" "$svc" >/dev/null 2>&1 || true
+}
+
+# Services that must never run twice (celery beat would schedule every task
+# twice): stop the old one, then start the new one. A few seconds of missing
+# scheduler ticks are invisible to users.
+function replace_singleton() {
+    local svc="$1"
+    local old_ids new_ids id
+
+    old_ids=$(service_container_ids "$svc")
+    if [[ -n "$old_ids" ]]; then
+        echo "   Replacing ${svc}..."
+        docker stop -t "$OLD_CONTAINER_STOP_TIMEOUT" $old_ids >/dev/null 2>&1 || true
+        discard_containers $old_ids
+    else
+        echo "   Starting ${svc}..."
+    fi
+
+    compose_try up -d --no-deps --no-build "$svc" >/dev/null 2>&1 || return 1
+    new_ids=$(service_container_ids "$svc")
+    for id in $new_ids; do
+        if ! wait_container_ready "$id" "$svc"; then
+            show_container_logs "$id"
+            return 1
+        fi
+    done
+}
+
+function run_migrations() {
+    echo "   Applying database migrations (the current version keeps serving)..."
+    compose_try up -d --no-deps --no-build --force-recreate migrator >/dev/null 2>&1 || {
+        echo "   Could not start the migrator service."
+        return 1
+    }
 
     local migrator_container_id
     migrator_container_id=$(docker container ls -aq -f "name=plane-migrator" | head -n1)
+    [[ -z "$migrator_container_id" ]] && return 0
 
-    if [[ -n "$migrator_container_id" ]]; then
-        local idx=0
-        while docker inspect --format='{{.State.Status}}' "$migrator_container_id" 2>/dev/null | grep -q "running"; do
-            local dots
-            dots=$(printf '%*s' "$idx" | tr ' ' '.')
-            printf "\r>> Waiting for Data Migration to finish%s" "$dots"
-            ((idx++))
-            sleep 1
-        done
-
-        printf "\r%*s\r" 60 ""
-
-        local migrator_exit_code
-        migrator_exit_code=$(docker inspect --format='{{.State.ExitCode}}' "$migrator_container_id")
-        if [[ "$migrator_exit_code" != "0" ]]; then
-            echo "Gizmo Server failed to start"
-            echo ""
-            echo "Please check the logs for the migrator service and resolve the issue."
-            echo "Logs: ./setup.sh logs migrator"
-            exit 1
-        fi
-
-        echo "   Data Migration completed successfully"
-    fi
-
-    local api_container_id
-    api_container_id=$(docker container ls -q -f "name=api" | head -n1)
-
-    if [[ -z "$api_container_id" ]]; then
-        echo "   API container was not found. Check service status with: ./setup.sh status"
-        exit 1
-    fi
-
-    local api_ready=true
-    local max_wait_time=300
-    local start_time
-    start_time=$(date +%s)
     local idx=0
-
-    echo "   Waiting for API Service to be ready..."
-    while ! docker exec "$api_container_id" python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/', timeout=3)" >/dev/null 2>&1; do
-        local current_time
-        current_time=$(date +%s)
-        local elapsed_time=$((current_time - start_time))
-
-        if [[ $elapsed_time -gt $max_wait_time ]]; then
-            echo ""
-            echo "   API Service health check timed out after 5 minutes."
-            api_ready=false
-            break
-        fi
-
+    while docker inspect --format='{{.State.Status}}' "$migrator_container_id" 2>/dev/null | grep -q "running"; do
         local dots
         dots=$(printf '%*s' "$idx" | tr ' ' '.')
-        printf "\r>> Waiting for API Service to Start (%ss)%s" "$elapsed_time" "$dots"
-        ((idx++))
+        printf "\r>> Waiting for Data Migration to finish%s" "$dots"
+        idx=$((idx + 1))
         sleep 1
     done
+    clear_progress_line
 
-    printf "\r%*s\r" 60 ""
+    local migrator_exit_code
+    migrator_exit_code=$(docker inspect --format='{{.State.ExitCode}}' "$migrator_container_id")
+    if [[ "$migrator_exit_code" != "0" ]]; then
+        echo "Gizmo migrations failed - the current version is still running."
+        echo ""
+        echo "Please check the logs for the migrator service and resolve the issue."
+        echo "Logs: ./setup.sh logs migrator"
+        return 1
+    fi
 
-    if [[ "$api_ready" == true ]]; then
+    echo "   Data Migration completed successfully"
+}
+
+# Final end-to-end check through the proxy (the path real users take).
+function wait_for_public_endpoint() {
+    local proxy_id max_wait=120 start now idx=0
+    proxy_id=$(service_container_ids proxy | head -n1)
+    [[ -z "$proxy_id" ]] && return 1
+    start=$(date +%s)
+
+    while ! docker exec "$proxy_id" curl -fsS -o /dev/null --max-time 5 http://127.0.0.1/api/instances/ >/dev/null 2>&1; do
+        now=$(date +%s)
+        if (( now - start > max_wait )); then
+            clear_progress_line
+            return 1
+        fi
+        printf "\r>> Waiting for the proxy to answer (%ss)%s" "$((now - start))" "$(printf '%*s' "$((idx % 4))" | tr ' ' '.')"
+        idx=$((idx + 1))
+        sleep 2
+    done
+    clear_progress_line
+}
+
+function acquire_deploy_lock() {
+    # Two concurrent rollouts would fight over the replica counts.
+    if command -v flock >/dev/null 2>&1; then
+        exec 9>"${REPO_ROOT}/.setup.lock"
+        if ! flock -n 9; then
+            echo "Another ./setup.sh rollout is already running. Wait for it to finish."
+            exit 1
+        fi
+    fi
+}
+
+function start_services() {
+    initialize_local_env_files
+    acquire_deploy_lock
+
+    # Building never touches running containers, so users are not affected.
+    build_local_images false
+
+    echo ""
+    echo "Rolling out the new version without stopping the running one..."
+
+    # Infrastructure is only created when missing - never recreated here.
+    compose_try up -d --no-deps --no-build --no-recreate "${INFRA_SERVICES[@]}" >/dev/null 2>&1 || {
+        echo "Could not start the database / redis / rabbitmq / minio services."
+        exit 1
+    }
+
+    run_migrations || exit 1
+
+    local svc
+    for svc in "${ROLLING_SERVICES[@]}"; do
+        roll_service "$svc" || rollout_failed "$svc"
+    done
+    for svc in "${SINGLETON_SERVICES[@]}"; do
+        replace_singleton "$svc" || rollout_failed "$svc"
+    done
+
+    # Compose recreates the proxy only if its image or configuration changed.
+    echo "   Updating proxy (restarted only if its image or config changed)..."
+    compose_try up -d --no-deps --no-build proxy >/dev/null 2>&1 || rollout_failed proxy
+
+    if wait_for_public_endpoint; then
         echo "   API Service started successfully"
     else
-        echo "   API Service did not respond to health-check - please verify manually."
+        echo "   The proxy did not answer the health-check - please verify manually: ./setup.sh status"
     fi
+
+    # Images of previous builds are dangling now; free the disk space.
+    docker image prune -f >/dev/null 2>&1 || true
 
     echo "   Gizmo Server started successfully"
     echo ""
@@ -540,7 +758,14 @@ function stop_all_services() {
     stop_services
 }
 
+# A restart is a rolling redeploy (see "Zero-downtime rollout" above): users keep
+# working while the new version is built and swapped in.
 function restart_services() {
+    start_services
+}
+
+# Full stop/start including database and proxy. Causes downtime.
+function hard_restart_services() {
     stop_services
     start_services
 }
@@ -556,8 +781,9 @@ function restart_git_services() {
 }
 
 function restart_all_services() {
-    stop_all_services
-    start_all_services
+    restart_services
+    restart_mail_services
+    restart_git_services
 }
 
 function rebuild_services() {
@@ -822,7 +1048,7 @@ function ask_for_action() {
         echo "Select a Action you want to perform:"
         echo "   1) Install / Build local images"
         echo "   2) Start all (Gizmo + mail + git)"
-        echo "   3) Start Gizmo only"
+        echo "   3) Start Gizmo only (rolling update, no downtime when already running)"
         echo "   4) Start mail server only"
         echo "   5) Start git server only"
         echo "   6) Stop all"
@@ -830,7 +1056,7 @@ function ask_for_action() {
         echo "   8) Stop mail server only"
         echo "   9) Stop git server only"
         echo "   10) Restart all"
-        echo "   11) Restart Gizmo only"
+        echo "   11) Restart Gizmo only (rolling, no downtime; ./setup.sh hard-restart = full stop/start)"
         echo "   12) Restart mail server only"
         echo "   13) Restart git server only"
         echo "   14) Rebuild Gizmo images without cache"
@@ -892,6 +1118,9 @@ function ask_for_action() {
             ;;
         11|restart)
             restart_target "${2:-plane}"
+            ;;
+        hard-restart)
+            hard_restart_services
             ;;
         12)
             restart_target mail

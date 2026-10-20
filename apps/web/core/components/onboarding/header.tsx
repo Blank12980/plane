@@ -43,7 +43,7 @@ export const OnboardingHeader = observer(function OnboardingHeader(props: Onboar
   };
 
   // can go back
-  const canGoBack = ![EOnboardingSteps.PROFILE_SETUP, EOnboardingSteps.INVITE_MEMBERS].includes(currentStep);
+  const canGoBack = currentStep !== EOnboardingSteps.PROFILE_SETUP;
 
   // Get current step number for progress tracking
   const getCurrentStepNumber = (): number => {
@@ -51,16 +51,14 @@ export const OnboardingHeader = observer(function OnboardingHeader(props: Onboar
       EOnboardingSteps.PROFILE_SETUP,
       EOnboardingSteps.ROLE_SETUP,
       EOnboardingSteps.USE_CASE_SETUP,
-      ...(hasInvitations
-        ? [EOnboardingSteps.WORKSPACE_CREATE_OR_JOIN]
-        : [EOnboardingSteps.WORKSPACE_CREATE_OR_JOIN, EOnboardingSteps.INVITE_MEMBERS]),
+      ...(hasInvitations ? [EOnboardingSteps.WORKSPACE_CREATE_OR_JOIN] : []),
     ];
     return stepOrder.indexOf(currentStep) + 1;
   };
 
   // derived values
   const currentStepNumber = getCurrentStepNumber();
-  const totalSteps = hasInvitations ? 4 : 5; // 4 if invites available, 5 if not
+  const totalSteps = hasInvitations ? 4 : 3; // the invitations step exists only when there are invitations
   const userName = user?.display_name
     ? user?.display_name
     : user?.first_name

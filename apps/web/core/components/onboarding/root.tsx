@@ -30,8 +30,9 @@ export const OnboardingRoot = observer(function OnboardingRoot({ invitations = [
 
   const workspacesList = Object.values(workspaces ?? {});
 
-  // Calculate total steps based on whether invitations are available
-  const hasInvitations = invitations.length > 0;
+  // Creating a workspace is never offered during onboarding (it is optional and lives on the home panel).
+  // The only workspace-related step is accepting pending invitations, and only for users without a workspace.
+  const hasInvitations = invitations.length > 0 && workspacesList.length === 0;
 
   // complete onboarding
   const finishOnboarding = useCallback(async () => {
@@ -65,7 +66,7 @@ export const OnboardingRoot = observer(function OnboardingRoot({ invitations = [
   );
 
   const handleStepChange = useCallback(
-    (step: EOnboardingSteps, skipInvites?: boolean) => {
+    (step: EOnboardingSteps) => {
       switch (step) {
         case EOnboardingSteps.PROFILE_SETUP:
           setCurrentStep(EOnboardingSteps.ROLE_SETUP);
@@ -74,47 +75,29 @@ export const OnboardingRoot = observer(function OnboardingRoot({ invitations = [
           setCurrentStep(EOnboardingSteps.USE_CASE_SETUP);
           break;
         case EOnboardingSteps.USE_CASE_SETUP:
-          stepChange({ profile_complete: true });
-          if (workspacesList.length > 0) finishOnboarding();
-          else setCurrentStep(EOnboardingSteps.WORKSPACE_CREATE_OR_JOIN);
+          // Saving the step and finishing onboarding are separate profile updates: keep them in order so the
+          // older "profile_complete only" payload can never overwrite the final state.
+          void (async () => {
+            await stepChange({ profile_complete: true });
+            if (hasInvitations) setCurrentStep(EOnboardingSteps.WORKSPACE_CREATE_OR_JOIN);
+            else await finishOnboarding();
+          })();
           break;
         case EOnboardingSteps.WORKSPACE_CREATE_OR_JOIN:
-          if (skipInvites) finishOnboarding();
-          else {
-            setCurrentStep(EOnboardingSteps.INVITE_MEMBERS);
-            stepChange({ workspace_create: true });
-          }
-          break;
-        case EOnboardingSteps.INVITE_MEMBERS:
-          stepChange({ workspace_invite: true });
-          finishOnboarding();
+          void finishOnboarding();
           break;
       }
     },
-    [stepChange, finishOnboarding, workspacesList]
+    [stepChange, finishOnboarding, hasInvitations]
   );
 
   const updateCurrentStep = (step: EOnboardingSteps) => setCurrentStep(step);
 
   useEffect(() => {
-    const handleInitialStep = () => {
-      if (
-        userProfile?.onboarding_step?.profile_complete &&
-        !userProfile?.onboarding_step?.workspace_create &&
-        !userProfile?.onboarding_step?.workspace_join
-      ) {
-        setCurrentStep(EOnboardingSteps.WORKSPACE_CREATE_OR_JOIN);
-      }
-      if (
-        userProfile?.onboarding_step?.profile_complete &&
-        userProfile?.onboarding_step?.workspace_create &&
-        !userProfile?.onboarding_step?.workspace_invite
-      ) {
-        setCurrentStep(EOnboardingSteps.INVITE_MEMBERS);
-      }
-    };
-
-    handleInitialStep();
+    // A profile that was completed earlier only has the optional invitations step left.
+    if (!userProfile?.onboarding_step?.profile_complete) return;
+    if (hasInvitations) setCurrentStep(EOnboardingSteps.WORKSPACE_CREATE_OR_JOIN);
+    else void finishOnboarding();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

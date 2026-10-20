@@ -20,7 +20,7 @@ import { CommonOnboardingHeader } from "../common";
 import type { TProfileSetupFormValues } from "../profile/root";
 
 type Props = {
-  handleStepChange: (step: EOnboardingSteps, skipInvites?: boolean) => void;
+  handleStepChange: (step: EOnboardingSteps) => void;
 };
 
 const ROLES = [

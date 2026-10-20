@@ -24,6 +24,9 @@ from plane.license.api.views import (
     MailboxEndpoint,
     MailAliasEndpoint,
     MailConfigEndpoint,
+    McpActivityEndpoint,
+    McpSettingsEndpoint,
+    McpTokensEndpoint,
 )
 
 urlpatterns = [
@@ -96,6 +99,10 @@ urlpatterns = [
         name="instance-user-password",
     ),
     # Mail stack administration (god-mode -> Mail)
+    path("mcp/", McpSettingsEndpoint.as_view(), name="instance-mcp"),
+    path("mcp/tokens/", McpTokensEndpoint.as_view(), name="instance-mcp-tokens"),
+    path("mcp/tokens/<uuid:pk>/", McpTokensEndpoint.as_view(), name="instance-mcp-token-detail"),
+    path("mcp/activity/", McpActivityEndpoint.as_view(), name="instance-mcp-activity"),
     path("mail/config/", MailConfigEndpoint.as_view(), name="instance-mail-config"),
     path("mailboxes/", MailboxEndpoint.as_view(), name="instance-mailboxes"),
     path("mailboxes/<uuid:pk>/", MailboxEndpoint.as_view(), name="instance-mailbox-detail"),

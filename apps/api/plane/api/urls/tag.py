@@ -9,6 +9,8 @@ from plane.api.views import (
     WorkItemTagAPIEndpoint,
     WorkItemWorkLogAPIEndpoint,
     TimeReportAPIEndpoint,
+    ProjectTimeBudgetAPIEndpoint,
+    ModuleTimeBudgetAPIEndpoint,
 )
 
 urlpatterns = [
@@ -41,5 +43,15 @@ urlpatterns = [
         "workspaces/<str:slug>/time-report/",
         TimeReportAPIEndpoint.as_view(http_method_names=["get"]),
         name="time-report",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/time-budget/",
+        ProjectTimeBudgetAPIEndpoint.as_view(http_method_names=["get"]),
+        name="project-time-budget",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/modules/<uuid:module_id>/time-budget/",
+        ModuleTimeBudgetAPIEndpoint.as_view(http_method_names=["get"]),
+        name="module-time-budget",
     ),
 ]

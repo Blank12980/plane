@@ -6,3 +6,4 @@
 
 export * from "./instance.service";
 export * from "./mailbox.service";
+export * from "./mcp.service";

@@ -1,6 +1,12 @@
+# Zero-downtime rollout (see setup.sh `start` / `restart`):
+#   * stateless services (web, admin, space, api, worker, live, mcp) have NO
+#     container_name on purpose - setup.sh starts the new container next to the
+#     old one (`up --scale <svc>=2 --no-recreate`), waits until its healthcheck
+#     passes and only then stops the old one;
+#   * database, redis, rabbitmq, minio and the proxy are never recreated unless
+#     their own image/config changed.
 services:
   web:
-    container_name: web
     build:
       context: .
       dockerfile: ./apps/web/Dockerfile.web
@@ -13,11 +19,15 @@ services:
         VITE_SPACE_BASE_URL: ${APP_HOST:-http://localhost}
         VITE_LIVE_BASE_URL: ${APP_HOST:-http://localhost}
     restart: always
+    healthcheck:
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     depends_on:
       - api
 
   admin:
-    container_name: admin
     build:
       context: .
       dockerfile: ./apps/admin/Dockerfile.admin
@@ -30,12 +40,16 @@ services:
         VITE_SPACE_BASE_URL: ${APP_HOST:-http://localhost}
         VITE_LIVE_BASE_URL: ${APP_HOST:-http://localhost}
     restart: always
+    healthcheck:
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     depends_on:
       - api
       - web
 
   space:
-    container_name: space
     build:
       context: .
       dockerfile: ./apps/space/Dockerfile.space
@@ -48,18 +62,29 @@ services:
         VITE_SPACE_BASE_URL: ${APP_HOST:-http://localhost}
         VITE_LIVE_BASE_URL: ${APP_HOST:-http://localhost}
     restart: always
+    healthcheck:
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     depends_on:
       - api
       - web
 
   api:
-    container_name: api
     build:
       context: ./apps/api
       dockerfile: Dockerfile.api
       args:
         DOCKER_BUILDKIT: 1
     restart: always
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 180s
     command: ./bin/docker-entrypoint-api.sh
     env_file:
       - ./apps/api/.env
@@ -77,13 +102,13 @@ services:
       - plane-redis
 
   worker:
-    container_name: bgworker
     build:
       context: ./apps/api
       dockerfile: Dockerfile.api
       args:
         DOCKER_BUILDKIT: 1
     restart: always
+    stop_grace_period: 60s
     command: ./bin/docker-entrypoint-worker.sh
     env_file:
       - ./apps/api/.env
@@ -102,13 +127,13 @@ services:
       - plane-redis
 
   beat-worker:
-    container_name: beatworker
     build:
       context: ./apps/api
       dockerfile: Dockerfile.api
       args:
         DOCKER_BUILDKIT: 1
     restart: always
+    stop_grace_period: 60s
     command: ./bin/docker-entrypoint-beat.sh
     env_file:
       - ./apps/api/.env
@@ -149,7 +174,6 @@ services:
       - plane-redis
 
   live:
-    container_name: plane-live
     build:
       context: .
       dockerfile: ./apps/live/Dockerfile.live
@@ -157,6 +181,12 @@ services:
         DOCKER_BUILDKIT: 1
         APP_HOST: ${APP_HOST:-http://localhost}
     restart: always
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/live/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     env_file:
       - ./apps/api/.env
     environment:
@@ -168,13 +198,17 @@ services:
   # MCP server for AI agents (https://<APP_HOST>/mcp). Stateless adapter over
   # the public API; every request runs with the caller's own API token.
   mcp:
-    container_name: plane-mcp
     build:
       context: .
       dockerfile: ./apps/mcp/Dockerfile.mcp
       args:
         DOCKER_BUILDKIT: 1
     restart: always
+    healthcheck:
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     environment:
       PORT: 3000
       API_BASE_URL: http://api:8000

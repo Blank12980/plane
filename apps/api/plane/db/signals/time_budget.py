@@ -3,7 +3,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from plane.db.models import IssueWorkLog, ModuleIssue
-from plane.utils.module_time_budget import check_issue_time_budgets, check_linked_module_time_budgets
+from plane.utils.time_budget import check_issue_time_budgets, check_linked_module_time_budgets
 
 
 @receiver(post_save, sender=IssueWorkLog, dispatch_uid="worklog_time_budget")

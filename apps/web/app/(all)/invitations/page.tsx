@@ -14,7 +14,7 @@ import { CheckCircle2 } from "lucide-react";
 import { ROLE } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
 // types
-import { Button } from "@plane/propel/button";
+import { Button, getButtonStyling } from "@plane/propel/button";
 import { PlaneLogo } from "@plane/propel/icons";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { IWorkspaceMemberInvitation } from "@plane/types";
@@ -37,6 +37,26 @@ import { AuthenticationWrapper } from "@/lib/wrappers/authentication-wrapper";
 import { WorkspaceService } from "@/services/workspace.service";
 
 const workspaceService = new WorkspaceService();
+
+/** Creating a workspace is optional: it is offered here, on the home panel, and never during onboarding. */
+function CreateWorkspaceCard({ isCreationDisabled }: { isCreationDisabled: boolean }) {
+  return (
+    <div className="w-full max-w-md rounded-lg border border-subtle bg-surface-1 p-4 text-left">
+      <h5 className="text-14 font-medium text-primary">Создать рабочее пространство</h5>
+      <p className="mt-1 text-13 text-secondary">
+        Это необязательно: вы можете работать в пространствах, куда вас пригласили. Своё пространство можно создать в
+        любой момент.
+      </p>
+      {isCreationDisabled ? (
+        <p className="mt-3 text-13 text-tertiary">Администратор экземпляра отключил создание пространств.</p>
+      ) : (
+        <Link href="/create-workspace" className={`mt-3 inline-flex ${getButtonStyling("secondary", "base")}`}>
+          Создать пространство
+        </Link>
+      )}
+    </div>
+  );
+}
 
 function UserInvitationsPage() {
   // states
@@ -197,6 +217,7 @@ function UserInvitationsPage() {
                     </Link>
                   )}
                 </div>
+                <CreateWorkspaceCard isCreationDisabled={!!config?.is_workspace_creation_disabled} />
               </div>
             </div>
           ) : (
@@ -217,9 +238,7 @@ function UserInvitationsPage() {
                   },
                 }}
               />
-              {!config?.is_workspace_creation_disabled && (
-                <Link href="/create-workspace">Создать рабочее пространство</Link>
-              )}
+              <CreateWorkspaceCard isCreationDisabled={!!config?.is_workspace_creation_disabled} />
             </div>
           )
         ) : (

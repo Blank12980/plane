@@ -37,6 +37,13 @@ export const PROJECT_SETTINGS: Record<TProjectSettingsTabs, TProjectSettingsItem
     access: [EUserProjectRoles.ADMIN, EUserProjectRoles.MEMBER, EUserProjectRoles.GUEST],
     highlight: (pathname: string, baseUrl: string) => pathname === `${baseUrl}/members/`,
   },
+  clients: {
+    key: "clients",
+    i18n_label: "gizmo_settings.clients",
+    href: `/clients`,
+    access: [EUserProjectRoles.ADMIN],
+    highlight: (pathname: string, baseUrl: string) => pathname === `${baseUrl}/clients/`,
+  },
   features_cycles: {
     key: "features_cycles",
     i18n_label: "project_settings.features.cycles.short_title",
@@ -100,12 +107,23 @@ export const PROJECT_SETTINGS: Record<TProjectSettingsTabs, TProjectSettingsItem
     access: [EUserProjectRoles.ADMIN],
     highlight: (pathname: string, baseUrl: string) => pathname === `${baseUrl}/automations/`,
   },
+  time_budget: {
+    key: "time_budget",
+    i18n_label: "gizmo_settings.time_budget",
+    href: `/time-budget`,
+    access: [EUserProjectRoles.ADMIN, EUserProjectRoles.MEMBER],
+    highlight: (pathname: string, baseUrl: string) => pathname === `${baseUrl}/time-budget/`,
+  },
 };
 
 export const PROJECT_SETTINGS_FLAT_MAP: TProjectSettingsItem[] = Object.values(PROJECT_SETTINGS);
 
 export const GROUPED_PROJECT_SETTINGS: Record<PROJECT_SETTINGS_CATEGORY, TProjectSettingsItem[]> = {
-  [PROJECT_SETTINGS_CATEGORY.GENERAL]: [PROJECT_SETTINGS["general"], PROJECT_SETTINGS["members"]],
+  [PROJECT_SETTINGS_CATEGORY.GENERAL]: [
+    PROJECT_SETTINGS["general"],
+    PROJECT_SETTINGS["members"],
+    PROJECT_SETTINGS["clients"],
+  ],
   [PROJECT_SETTINGS_CATEGORY.FEATURES]: [
     PROJECT_SETTINGS["features_cycles"],
     PROJECT_SETTINGS["features_modules"],
@@ -118,5 +136,5 @@ export const GROUPED_PROJECT_SETTINGS: Record<PROJECT_SETTINGS_CATEGORY, TProjec
     PROJECT_SETTINGS["labels"],
     PROJECT_SETTINGS["estimates"],
   ],
-  [PROJECT_SETTINGS_CATEGORY.EXECUTION]: [PROJECT_SETTINGS["automations"]],
+  [PROJECT_SETTINGS_CATEGORY.EXECUTION]: [PROJECT_SETTINGS["automations"], PROJECT_SETTINGS["time_budget"]],
 };

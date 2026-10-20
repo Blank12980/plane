@@ -10,3 +10,4 @@ from .instance import (
     InstanceConfiguration,
     InstanceEdition,
 )
+from .mcp import DEFAULT_MCP_ALLOWED_SCOPES, McpSettings

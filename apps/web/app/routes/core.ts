@@ -288,6 +288,10 @@ export const coreRoutes: RouteConfigEntry[] = [
             "./(all)/[workspaceSlug]/(settings)/settings/(workspace)/members/page.tsx"
           ),
           route(
+            ":workspaceSlug/settings/clients",
+            "./(all)/[workspaceSlug]/(settings)/settings/(workspace)/clients/page.tsx"
+          ),
+          route(
             ":workspaceSlug/settings/billing",
             "./(all)/[workspaceSlug]/(settings)/settings/(workspace)/billing/page.tsx"
           ),
@@ -362,6 +366,16 @@ export const coreRoutes: RouteConfigEntry[] = [
             route(
               ":workspaceSlug/settings/projects/:projectId/estimates",
               "./(all)/[workspaceSlug]/(settings)/settings/projects/[projectId]/estimates/page.tsx"
+            ),
+            // Project clients (what each client sees inside this project)
+            route(
+              ":workspaceSlug/settings/projects/:projectId/clients",
+              "./(all)/[workspaceSlug]/(settings)/settings/projects/[projectId]/clients/page.tsx"
+            ),
+            // Project monthly hours limit
+            route(
+              ":workspaceSlug/settings/projects/:projectId/time-budget",
+              "./(all)/[workspaceSlug]/(settings)/settings/projects/[projectId]/time-budget/page.tsx"
             ),
             // Project Automations
             layout("./(all)/[workspaceSlug]/(settings)/settings/projects/[projectId]/automations/layout.tsx", [

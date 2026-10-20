@@ -58,6 +58,7 @@ export interface IWorkspaceNotificationStore {
     queryCursorType?: TNotificationQueryParamType
   ) => Promise<TNotificationPaginatedInfo | undefined>;
   markAllNotificationsAsRead: (workspaceId: string) => Promise<void>;
+  markAllUnreadAsRead: (workspaceSlug: string) => Promise<void>;
 }
 
 export class WorkspaceNotificationStore implements IWorkspaceNotificationStore {
@@ -109,6 +110,7 @@ export class WorkspaceNotificationStore implements IWorkspaceNotificationStore {
       getUnreadNotificationsCount: action,
       getNotifications: action,
       markAllNotificationsAsRead: action,
+      markAllUnreadAsRead: action,
     });
   }
 
@@ -411,5 +413,29 @@ export class WorkspaceNotificationStore implements IWorkspaceNotificationStore {
     } finally {
       runInAction(() => (this.loader = undefined));
     }
+  };
+  /**
+   * @description mark every unread (not snoozed, not archived) notification as read, independent of the filters and
+   * the tab that are active in the notifications page. Used by the quick "mark as read" action of the bell.
+   * @param { string } workspaceSlug
+   * @returns { void }
+   */
+  markAllUnreadAsRead = async (workspaceSlug: string): Promise<void> => {
+    await workspaceNotificationService.markAllNotificationsAsRead(workspaceSlug, {
+      type: "all",
+      snoozed: false,
+      archived: false,
+    });
+    runInAction(() => {
+      const readAt = new Date().toUTCString();
+      set(this, "unreadNotificationsCount", {
+        total_unread_notifications_count: 0,
+        mention_unread_notifications_count: 0,
+        recent_notifications: [],
+      });
+      Object.values(this.notifications).forEach((notification) => {
+        if (!notification.read_at && !notification.archived_at) notification.mutateNotification({ read_at: readAt });
+      });
+    });
   };
 }

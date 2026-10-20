@@ -29,6 +29,7 @@ export type TNotificationIssueLite = {
 
 export type TNotificationData = {
   module?: { id: string; name: string };
+  project?: { id: string; name: string };
   time_budget?: { month: string; limit_minutes: number; total_minutes: number };
   issue?: TNotificationIssueLite;
   issue_activity?: {

@@ -4,9 +4,13 @@ import { APIService } from "@/services/api.service";
 export type TModuleTimeBudget = {
   month: string;
   limit_minutes: number | null;
+  /** The time logged on sub-work-items of the module's work items counts as well. */
+  include_subtasks: boolean;
   total_minutes: number;
   reached: boolean;
 };
+
+export type TModuleTimeBudgetUpdate = Partial<Pick<TModuleTimeBudget, "limit_minutes" | "include_subtasks">>;
 
 class ModuleTimeBudgetService extends APIService {
   constructor() {
@@ -22,12 +26,13 @@ class ModuleTimeBudgetService extends APIService {
     workspaceSlug: string,
     projectId: string,
     moduleId: string,
-    limitMinutes: number | null
+    update: TModuleTimeBudgetUpdate
   ): Promise<TModuleTimeBudget> {
     return (
-      await this.patch(`/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/time-budget/`, {
-        limit_minutes: limitMinutes,
-      })
+      await this.patch(
+        `/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/time-budget/`,
+        update
+      )
     ).data;
   }
 }

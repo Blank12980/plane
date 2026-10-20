@@ -7,11 +7,18 @@ from plane.app.permissions import ROLE, allow_permission
 from plane.app.views.base import BaseAPIView
 from plane.db.models import Module
 from plane.db.models.module_time_budget import ModuleTimeBudget
-from plane.utils.module_time_budget import check_module_time_budget, time_budget_summary
+from plane.utils.time_budget import check_module_time_budget, time_budget_summary
 
 
 class TimeBudgetSerializer(serializers.Serializer):
-    limit_minutes = serializers.IntegerField(min_value=1, max_value=2147483647, allow_null=True)
+    limit_minutes = serializers.IntegerField(min_value=1, max_value=2147483647, allow_null=True, required=False)
+    # Whether the time logged on sub-work-items of the module's work items counts as well.
+    include_subtasks = serializers.BooleanField(required=False)
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError("Provide limit_minutes and/or include_subtasks.")
+        return attrs
 
 
 class ModuleTimeBudgetEndpoint(BaseAPIView):
