@@ -27,6 +27,10 @@ class McpSettings(models.Model):
     enabled = models.BooleanField(default=True)
     # Whether regular users may create MCP tokens for themselves in their profile settings.
     allow_user_tokens = models.BooleanField(default=True)
+    # Whether a user may create one token that works in every workspace they belong to.
+    allow_all_workspaces = models.BooleanField(default=True)
+    # Whether applications such as ChatGPT may connect through OAuth (the user approves them on a consent screen).
+    allow_oauth = models.BooleanField(default=True)
     # Scopes a user may put on a token created in the profile settings.
     allowed_scopes = models.JSONField(default=default_mcp_allowed_scopes)
     # Longest lifetime of a token created in the profile settings, in days (0 = no limit).

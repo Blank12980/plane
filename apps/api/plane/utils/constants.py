@@ -14,6 +14,8 @@ RESTRICTED_WORKSPACE_SLUGS = [
     "profile",
     "spaces",
     "workspace-invitations",
+    "oauth",
+    "mcp",
     "password",
     "flags",
     "monitor",

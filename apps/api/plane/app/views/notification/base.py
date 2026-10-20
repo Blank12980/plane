@@ -24,6 +24,7 @@ from plane.db.models import (
 )
 from plane.utils.paginator import BasePaginator
 from plane.app.permissions import allow_permission, ROLE
+from plane.utils.assigned_tasks import MAX_NEW_TASKS_IN_BELL, task_payload, unseen_assigned_issues
 from plane.utils.project_access import projects_for_user
 
 # Module imports
@@ -234,11 +235,16 @@ class UnreadNotificationEndpoint(BaseAPIView):
             .order_by("-created_at", "-id")[:20]
         )
 
+        # Work items assigned to the user that the user has not opened yet ("new tasks").
+        new_tasks = unseen_assigned_issues(request.user, slug)
+        new_tasks_count = new_tasks.count()
         return Response(
             {
                 "total_unread_notifications_count": int(unread_notifications_count),
                 "mention_unread_notifications_count": int(mention_notifications_count),
                 "recent_notifications": NotificationSerializer(recent, many=True).data,
+                "new_tasks_count": new_tasks_count,
+                "new_tasks": [task_payload(issue) for issue in new_tasks[:MAX_NEW_TASKS_IN_BELL]],
             },
             status=status.HTTP_200_OK,
         )

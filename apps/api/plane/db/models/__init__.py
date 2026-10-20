@@ -111,6 +111,7 @@ from .device import Device, DeviceSession
 from .sticky import Sticky
 
 from .description import Description, DescriptionVersion
-from .client_access import ClientAccessGrant
+from .client_access import ClientAccessGrant, ProjectClient
+from .oauth import OAuthAuthorizationCode, OAuthAuthorizationRequest, OAuthClient, OAuthConnection
 from .module_time_budget import ModuleTimeBudget, ModuleTimeBudgetAlert
 from .project_time_budget import ProjectTimeBudget, ProjectTimeBudgetAlert

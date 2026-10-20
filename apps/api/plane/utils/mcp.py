@@ -27,6 +27,8 @@ def _policy_from_row(row):
     return {
         "enabled": row.enabled,
         "allow_user_tokens": row.allow_user_tokens,
+        "allow_all_workspaces": row.allow_all_workspaces,
+        "allow_oauth": row.allow_oauth,
         # keep the canonical order and ignore anything that is not a known scope any more
         "allowed_scopes": [scope for scope in API_TOKEN_SCOPES if scope in (row.allowed_scopes or [])],
         "max_token_days": row.max_token_days,
@@ -61,7 +63,7 @@ def invalidate_mcp_policy():
 
 def is_mcp_request(request, api_token=None) -> bool:
     """The request comes from the MCP server (it marks every call with the tool name) or uses an MCP token."""
-    return bool(request.headers.get(MCP_TOOL_HEADER)) or getattr(api_token, "source", None) == "mcp"
+    return bool(request.headers.get(MCP_TOOL_HEADER)) or getattr(api_token, "source", None) in ("mcp", "oauth")
 
 
 def token_payload(token):
@@ -93,6 +95,8 @@ def token_payload(token):
 class McpSettingsSerializer(serializers.Serializer):
     enabled = serializers.BooleanField(required=False)
     allow_user_tokens = serializers.BooleanField(required=False)
+    allow_all_workspaces = serializers.BooleanField(required=False)
+    allow_oauth = serializers.BooleanField(required=False)
     allowed_scopes = serializers.ListField(child=serializers.ChoiceField(choices=API_TOKEN_SCOPES), required=False)
     max_token_days = serializers.IntegerField(required=False, min_value=0, max_value=3650)
     default_rate_limit = serializers.CharField(required=False, max_length=32)
@@ -114,7 +118,9 @@ class UserMcpTokenSerializer(serializers.Serializer):
     """A token a user creates for themselves in the profile settings, validated against the instance policy."""
 
     label = serializers.CharField(max_length=255)
-    workspace_slug = serializers.SlugField()
+    # Either one workspace, or ``all_workspaces``: one token for every workspace the user belongs to.
+    workspace_slug = serializers.SlugField(required=False)
+    all_workspaces = serializers.BooleanField(required=False, default=False)
     scopes = serializers.ListField(child=serializers.ChoiceField(choices=API_TOKEN_SCOPES), allow_empty=False)
     expires_in_days = serializers.IntegerField(required=False, min_value=1, max_value=3650, allow_null=True)
 
@@ -127,6 +133,15 @@ class UserMcpTokenSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         policy = self.context["policy"]
+        if attrs.get("all_workspaces"):
+            if attrs.get("workspace_slug"):
+                raise serializers.ValidationError("Choose one workspace or all of them, not both.")
+            if not policy["allow_all_workspaces"]:
+                raise serializers.ValidationError(
+                    {"all_workspaces": "The instance administrator does not allow tokens for all workspaces."}
+                )
+        elif not attrs.get("workspace_slug"):
+            raise serializers.ValidationError({"workspace_slug": "Choose a workspace or all workspaces."})
         days = attrs.get("expires_in_days")
         max_days = policy["max_token_days"]
         if max_days:

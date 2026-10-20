@@ -17,10 +17,20 @@ import { MCP_SCOPES, cn } from "@plane/utils";
 
 const mcpService = new McpService();
 
-type TDraft = Pick<TMcpPolicy, "allow_user_tokens" | "allowed_scopes" | "max_token_days" | "default_rate_limit">;
+type TDraft = Pick<
+  TMcpPolicy,
+  | "allow_user_tokens"
+  | "allow_all_workspaces"
+  | "allow_oauth"
+  | "allowed_scopes"
+  | "max_token_days"
+  | "default_rate_limit"
+>;
 
 const pickDraft = (policy: TMcpPolicy): TDraft => ({
   allow_user_tokens: policy.allow_user_tokens,
+  allow_all_workspaces: policy.allow_all_workspaces,
+  allow_oauth: policy.allow_oauth,
   allowed_scopes: policy.allowed_scopes,
   max_token_days: policy.max_token_days,
   default_rate_limit: policy.default_rate_limit,
@@ -135,10 +145,11 @@ export function McpOverviewTab() {
       </section>
 
       {/* usage */}
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {[
           { label: "Токенов всего", value: stats.tokens_total },
           { label: "Активных токенов", value: stats.tokens_active },
+          { label: "Подключений OAuth", value: stats.oauth_connections },
           { label: "Использовались за 24 ч", value: stats.tokens_used_24h },
           {
             label: "Вызовов за 24 ч",
@@ -153,7 +164,7 @@ export function McpOverviewTab() {
           </div>
         ))}
         {stats.top_tools.length > 0 && (
-          <div className="col-span-2 rounded-md border border-subtle p-3 md:col-span-4">
+          <div className="col-span-2 rounded-md border border-subtle p-3 md:col-span-5">
             <div className="mb-1 text-12 text-tertiary">Чаще всего вызывают (за 24 ч)</div>
             <div className="flex flex-wrap gap-2 text-13">
               {stats.top_tools.map((item) => (
@@ -187,6 +198,38 @@ export function McpOverviewTab() {
             value={draft.allow_user_tokens}
             size="sm"
             onChange={() => setDraft({ ...draft, allow_user_tokens: !draft.allow_user_tokens })}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4 text-13">
+          <span>
+            <span className="block font-medium text-primary">Разрешить один токен для всех пространств</span>
+            <span className="text-secondary">
+              Пользователь сможет создать токен, который работает во всех его пространствах сразу, включая те, куда его
+              добавят позже. Если выключено, токен привязывается к одному пространству.
+            </span>
+          </span>
+          <ToggleSwitch
+            value={draft.allow_all_workspaces}
+            size="sm"
+            onChange={() => setDraft({ ...draft, allow_all_workspaces: !draft.allow_all_workspaces })}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4 text-13">
+          <span>
+            <span className="block font-medium text-primary">Разрешить подключение через OAuth (ChatGPT и др.)</span>
+            <span className="text-secondary">
+              Приложения (ChatGPT, Claude, Cursor, VS Code) сами регистрируются, а пользователь входит в Gizmo и
+              выбирает права и пространства на экране согласия; токен вручную создавать не нужно. Права, срок
+              (refresh-токен) и лимит запросов берутся из правил ниже. Выключение мгновенно закрывает все такие
+              подключения.
+            </span>
+          </span>
+          <ToggleSwitch
+            value={draft.allow_oauth}
+            size="sm"
+            onChange={() => setDraft({ ...draft, allow_oauth: !draft.allow_oauth })}
           />
         </div>
 

@@ -39,6 +39,9 @@ export const coreRoutes: RouteConfigEntry[] = [
   // Invitations
   layout("./(all)/invitations/layout.tsx", [route("invitations", "./(all)/invitations/page.tsx")]),
 
+  // OAuth consent screen for applications that connect to the MCP server (ChatGPT, ...)
+  layout("./(all)/oauth/authorize/layout.tsx", [route("oauth/authorize", "./(all)/oauth/authorize/page.tsx")]),
+
   // Workspace Invitations
   layout("./(all)/workspace-invitations/layout.tsx", [
     route("workspace-invitations", "./(all)/workspace-invitations/page.tsx"),

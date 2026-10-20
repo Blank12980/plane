@@ -8,10 +8,12 @@ import { useState } from "react";
 import useSWR from "swr";
 // gizmo imports
 import { Button } from "@plane/propel/button";
+import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import { Loader } from "@plane/ui";
 import { getFileURL } from "@plane/utils";
 // components
 import { ClientAccessModal } from "@/components/workspace/settings/client-access-modal";
+import { AddProjectClientModal } from "./add-project-client-modal";
 // services
 import type { ClientSummary } from "@/services/client-access.service";
 import { clientAccessService } from "@/services/client-access.service";
@@ -36,6 +38,7 @@ const pluralize = (count: number, one: string, few: string, many: string) => {
  */
 export function ClientsSettings({ workspaceSlug, projectId }: Props) {
   const [selected, setSelected] = useState<ClientSummary | null>(null);
+  const [isAddOpen, setIsAddOpen] = useState(false);
   const { data, error, isLoading, mutate } = useSWR(
     ["CLIENT_LIST", workspaceSlug, projectId ?? "workspace"],
     () => clientAccessService.listClients(workspaceSlug, projectId),
@@ -60,23 +63,61 @@ export function ClientsSettings({ workspaceSlug, projectId }: Props) {
       </p>
     );
   }
+  const addButton = projectId ? (
+    <Button variant="primary" size="sm" onClick={() => setIsAddOpen(true)}>
+      Добавить клиента
+    </Button>
+  ) : null;
+  const addModal = projectId ? (
+    <AddProjectClientModal
+      isOpen={isAddOpen}
+      onClose={() => setIsAddOpen(false)}
+      workspaceSlug={workspaceSlug}
+      projectId={projectId}
+      onAdded={() => void mutate()}
+    />
+  ) : null;
+
+  const removeFromProject = async (client: ClientSummary) => {
+    if (!projectId) return;
+    const name = client.display_name || client.email;
+    if (
+      !window.confirm(`Убрать клиента ${name} из проекта? Открытые для него задачи и страницы проекта будут закрыты.`)
+    ) {
+      return;
+    }
+    try {
+      await clientAccessService.removeFromProject(workspaceSlug, projectId, client.id);
+      setToast({ type: TOAST_TYPE.SUCCESS, title: "Клиент убран из проекта" });
+      await mutate();
+    } catch (operationError: unknown) {
+      console.error("Failed to remove the client", operationError);
+      setToast({ type: TOAST_TYPE.ERROR, title: "Не удалось убрать клиента", message: "Попробуйте ещё раз." });
+    }
+  };
+
   if (!data || data.clients.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-subtle p-6 text-center text-13 text-secondary">
-        <p className="font-medium text-primary">Клиентов пока нет</p>
+        <p className="font-medium text-primary">{projectId ? "В проекте пока нет клиентов" : "Клиентов пока нет"}</p>
         <p className="mt-1">
-          Назначьте роль «Клиент» участнику в настройках участников пространства, и он появится здесь. Для каждого
-          клиента вы выберете задачи и страницы, которые он увидит.
+          {projectId
+            ? "Добавьте клиента в проект, затем откройте ему нужные задачи и страницы."
+            : "Назначьте роль «Клиент» участнику в настройках участников пространства, и он появится здесь. Для каждого клиента вы выберете задачи и страницы, которые он увидит."}
         </p>
+        {addButton && <div className="mt-3">{addButton}</div>}
+        {addModal}
       </div>
     );
   }
 
   return (
     <div>
+      {addModal}
+      {addButton && <div className="mb-3 flex justify-end">{addButton}</div>}
       <p className="mb-4 text-13 text-secondary">
         {projectId
-          ? "Клиент видит только те задачи и страницы этого проекта, которые вы откроете. Доступ к другим проектам настраивают их администраторы."
+          ? "Клиенты, добавленные в проект. Клиент видит только те задачи и страницы проекта, которые вы откроете. Доступ к другим проектам настраивают их администраторы."
           : "Клиент видит только те задачи и страницы, которые вы откроете. Остальное содержимое проектов скрыто."}
       </p>
       <ul className="divide-y divide-subtle rounded-lg border border-subtle">
@@ -107,6 +148,11 @@ export function ClientsSettings({ workspaceSlug, projectId }: Props) {
                 <Button variant="secondary" size="sm" onClick={() => setSelected(client)}>
                   Настроить доступ
                 </Button>
+                {projectId && (
+                  <Button variant="ghost" size="sm" onClick={() => void removeFromProject(client)}>
+                    Убрать из проекта
+                  </Button>
+                )}
               </div>
             </li>
           );

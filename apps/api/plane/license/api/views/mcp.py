@@ -26,6 +26,7 @@ from plane.db.models import APIActivityLog, APIToken
 from plane.db.models.api import API_TOKEN_SCOPES
 from plane.license.api.permissions import InstanceAdminPermission
 from plane.license.models import McpSettings
+from plane.utils import oauth
 from plane.utils.mcp import (
     McpSettingsSerializer,
     get_mcp_policy,
@@ -93,6 +94,7 @@ class McpSettingsEndpoint(BaseAPIView):
                 "tokens_total": tokens.count(),
                 "tokens_active": tokens.filter(not_expired, is_active=True).count(),
                 "tokens_used_24h": tokens.filter(last_used__gte=day_ago).count(),
+                "oauth_connections": oauth.active_connections().count(),
                 "calls_24h": len(recent),
                 "calls_24h_truncated": len(recent) >= 200,
                 "errors_24h": sum(1 for row in recent if row["status"] >= 400),
@@ -150,3 +152,29 @@ class McpActivityEndpoint(BaseAPIView):
             limit = 50
         since = timezone.now() - timedelta(days=7)
         return Response(mcp_calls(since, limit), status=status.HTTP_200_OK)
+
+
+class McpOAuthConnectionsEndpoint(BaseAPIView):
+    """Applications that users connected through OAuth. Administrators can disconnect any of them."""
+
+    permission_classes = [InstanceAdminPermission]
+
+    def get(self, request):
+        rows = []
+        for connection in oauth.active_connections().order_by("-created_at")[:500]:
+            rows.append(
+                {
+                    **oauth.connection_payload(connection),
+                    "user": {
+                        "id": str(connection.user_id),
+                        "display_name": connection.user.display_name,
+                        "email": connection.user.email,
+                    },
+                }
+            )
+        return Response(rows, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        connection = get_object_or_404(oauth.active_connections(), pk=pk)
+        oauth.revoke_connection(connection)
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -7,7 +7,7 @@
 import { orderBy, clone, set } from "lodash-es";
 import { action, computed, makeObservable, observable, runInAction } from "mobx";
 // gizmo imports
-import type { THomeWidgetKeys, TWidgetEntityData } from "@plane/types";
+import type { THomeWidgetKeys, TCurrentTasksConfig, TWidgetEntityData } from "@plane/types";
 // gizmo web services
 import { WorkspaceService } from "@/services/workspace.service";
 // store
@@ -35,6 +35,7 @@ export interface IHomeStore {
     edge: string | undefined
   ) => Promise<void>;
   toggleWidget: (workspaceSlug: string, widgetKey: string, is_enabled: boolean) => void;
+  updateWidgetConfig: (workspaceSlug: string, widgetKey: THomeWidgetKeys, config: TCurrentTasksConfig) => Promise<void>;
 }
 
 export class HomeStore implements IHomeStore {
@@ -63,6 +64,7 @@ export class HomeStore implements IHomeStore {
       fetchWidgets: action,
       reorderWidget: action,
       toggleWidget: action,
+      updateWidgetConfig: action,
     });
     // services
     this.workspaceService = new WorkspaceService();
@@ -146,6 +148,23 @@ export class HomeStore implements IHomeStore {
       console.error("Failed to move widget");
       runInAction(() => {
         set(this.widgetsMap, [widgetKey, "sort_order"], sortOrderBeforeUpdate);
+      });
+      throw error;
+    }
+  };
+
+  /** Saves the widget's own settings (for "current tasks": the sort rules). Rolls back if the request fails. */
+  updateWidgetConfig = async (workspaceSlug: string, widgetKey: THomeWidgetKeys, config: TCurrentTasksConfig) => {
+    const previous = clone(this.widgetsMap[widgetKey]?.config);
+    runInAction(() => {
+      set(this.widgetsMap, [widgetKey, "config"], config);
+    });
+    try {
+      await this.workspaceService.updateWorkspaceWidget(workspaceSlug, widgetKey, { config });
+    } catch (error) {
+      console.error("Failed to save widget settings");
+      runInAction(() => {
+        set(this.widgetsMap, [widgetKey, "config"], previous);
       });
       throw error;
     }

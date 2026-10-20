@@ -43,7 +43,13 @@ def default_token_scopes():
 # and are governed by the instance wide MCP policy in God Mode.
 API_TOKEN_SOURCE_API = "api"
 API_TOKEN_SOURCE_MCP = "mcp"
-API_TOKEN_SOURCES = ((API_TOKEN_SOURCE_API, "API"), (API_TOKEN_SOURCE_MCP, "MCP"))
+# Short-lived access tokens issued by the OAuth authorization server of the MCP server (see db.OAuthConnection).
+API_TOKEN_SOURCE_OAUTH = "oauth"
+API_TOKEN_SOURCES = (
+    (API_TOKEN_SOURCE_API, "API"),
+    (API_TOKEN_SOURCE_MCP, "MCP"),
+    (API_TOKEN_SOURCE_OAUTH, "OAuth"),
+)
 
 
 class APIToken(BaseModel):

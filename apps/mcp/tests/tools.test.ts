@@ -78,6 +78,7 @@ describe("tool catalogue", () => {
         "list_states",
         "list_tags",
         "list_work_items",
+        "list_workspaces",
         "list_worklogs",
         "log_time",
         "search_work_items",
@@ -445,5 +446,31 @@ describe("monthly hours limits", () => {
     const { data } = await call(client, "get_time_budget", { project: "WEB", module: "Billing" });
     expect(data).toMatchObject({ scope: "module", limit_hours: null, remaining_hours: null, used_hours: 1.5 });
     expect(data.counts_module_tasks).toBeUndefined();
+  });
+});
+
+describe("tokens for several workspaces", () => {
+  it("list_workspaces tells the agent which workspaces it can use", async () => {
+    const { client } = await connect(
+      {
+        "GET /users/me/workspaces/": () => [
+          { slug: "acme", name: "Acme", extra: 1 },
+          { slug: "beta", name: "Beta" },
+        ],
+      },
+      { workspace: null }
+    );
+    const { data } = await call(client, "list_workspaces");
+    expect(data).toEqual([
+      { slug: "acme", name: "Acme" },
+      { slug: "beta", name: "Beta" },
+    ]);
+  });
+
+  it("without a workspace the error points to list_workspaces", async () => {
+    const { client } = await connect({}, { workspace: null });
+    const result = await call(client, "list_projects");
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain("list_workspaces");
   });
 });

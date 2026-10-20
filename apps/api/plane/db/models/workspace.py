@@ -385,6 +385,7 @@ class WorkspaceHomePreference(BaseModel):
 
     class HomeWidgetKeys(models.TextChoices):
         QUICK_LINKS = "quick_links", "Quick Links"
+        CURRENT_TASKS = "current_tasks", "Current Tasks"
         RECENTS = "recents", "Recents"
         MY_STICKIES = "my_stickies", "My Stickies"
         NEW_AT_PLANE = "new_at_plane", "New at Gizmo"

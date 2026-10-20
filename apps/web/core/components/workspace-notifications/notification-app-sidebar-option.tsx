@@ -40,20 +40,25 @@ export const NotificationAppSidebarOption = observer(function NotificationAppSid
   const totalNotifications =
     unreadNotificationsCount.mention_unread_notifications_count +
     unreadNotificationsCount.total_unread_notifications_count;
+  const hasNewTasks = (unreadNotificationsCount.new_tasks_count ?? 0) > 0;
 
-  if (totalNotifications <= 0) return <></>;
+  if (totalNotifications <= 0 && !hasNewTasks) return <></>;
 
   return (
     <div className="ml-auto flex items-center gap-1.5" aria-label={`Непрочитанных уведомлений: ${totalNotifications}`}>
-      <span
-        aria-hidden
-        className="flex size-4 items-center justify-center rounded-full bg-danger-primary text-[11px] leading-none font-bold text-white"
-      >
-        !
-      </span>
-      <div className="rounded bg-accent-primary/15 px-1 font-semibold text-accent-primary">
-        <CountChip count={`${isMentionsEnabled ? `@ ` : ``}${getNumberCount(totalNotifications)}`} />
-      </div>
+      {hasNewTasks && (
+        <span
+          title="Есть новые задачи"
+          className="flex size-4 items-center justify-center rounded-full bg-danger-primary text-[11px] leading-none font-bold text-white"
+        >
+          !
+        </span>
+      )}
+      {totalNotifications > 0 && (
+        <div className="rounded bg-accent-primary/15 px-1 font-semibold text-accent-primary">
+          <CountChip count={`${isMentionsEnabled ? `@ ` : ``}${getNumberCount(totalNotifications)}`} />
+        </div>
+      )}
     </div>
   );
 });

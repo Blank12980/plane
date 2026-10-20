@@ -5,6 +5,7 @@
 from django.urls import path
 from plane.app.views import ApiTokenEndpoint
 from plane.app.views.user.mcp import UserMcpEndpoint, UserMcpTokenEndpoint
+from plane.app.views.user.oauth import OAuthConsentEndpoint, UserOAuthConnectionEndpoint
 
 urlpatterns = [
     # API Tokens
@@ -23,4 +24,11 @@ urlpatterns = [
     path("users/me/mcp/", UserMcpEndpoint.as_view(), name="user-mcp"),
     path("users/me/mcp/tokens/", UserMcpTokenEndpoint.as_view(), name="user-mcp-tokens"),
     path("users/me/mcp/tokens/<uuid:pk>/", UserMcpTokenEndpoint.as_view(), name="user-mcp-token-detail"),
+    # MCP: applications the user connected through OAuth (ChatGPT, ...) and the consent screen
+    path(
+        "users/me/mcp/connections/<uuid:pk>/",
+        UserOAuthConnectionEndpoint.as_view(),
+        name="user-mcp-connection-detail",
+    ),
+    path("oauth/authorize/<str:request_id>/", OAuthConsentEndpoint.as_view(), name="oauth-consent"),
 ]

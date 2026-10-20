@@ -23,6 +23,7 @@ import { HomePageHeader } from "@/plane-web/components/home/header";
 // local imports
 import { StickiesWidget } from "../stickies/widget";
 import { HomeLoader, NoProjectsEmptyState, RecentActivityWidget } from "./widgets";
+import { CurrentTasksWidget } from "./widgets/current-tasks";
 import { DashboardQuickLinks } from "./widgets/links";
 import { ManageWidgetsModal } from "./widgets/manage";
 
@@ -37,6 +38,11 @@ export const HOME_WIDGETS_LIST: {
     component: DashboardQuickLinks,
     fullWidth: false,
     title: "home.quick_links.title_plural",
+  },
+  current_tasks: {
+    component: CurrentTasksWidget,
+    fullWidth: false,
+    title: "gizmo_settings.current_tasks",
   },
   recents: {
     component: RecentActivityWidget,

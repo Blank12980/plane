@@ -14,6 +14,10 @@ from rest_framework.response import Response
 from rest_framework import status
 
 
+# Higher comes first. "Current tasks" sits between the quick links and the recents.
+DEFAULT_WIDGET_SORT_ORDER = {"quick_links": 999, "current_tasks": 998.5, "recents": 998, "my_stickies": 997}
+
+
 class WorkspaceHomePreferenceViewSet(BaseAPIView):
     model = WorkspaceHomePreference
 
@@ -26,36 +30,27 @@ class WorkspaceHomePreferenceViewSet(BaseAPIView):
 
         get_preference = WorkspaceHomePreference.objects.filter(user=request.user, workspace_id=workspace.id)
 
-        create_preference_keys = []
-
         keys = [
             key
             for key, _ in WorkspaceHomePreference.HomeWidgetKeys.choices
             if key not in ["quick_tutorial", "new_at_plane"]
         ]
-
-        sort_order_counter = 1
-
-        for preference in keys:
-            if preference not in get_preference.values_list("key", flat=True):
-                create_preference_keys.append(preference)
-
-                sort_order = 1000 - sort_order_counter
-
-                preference = WorkspaceHomePreference.objects.bulk_create(
-                    [
-                        WorkspaceHomePreference(
-                            key=key,
-                            user=request.user,
-                            workspace=workspace,
-                            sort_order=sort_order,
-                        )
-                        for key in create_preference_keys
-                    ],
-                    batch_size=10,
-                    ignore_conflicts=True,
+        existing = set(get_preference.values_list("key", flat=True))
+        # Missing widgets (a new user, or a widget added in a later release) start in their default position.
+        WorkspaceHomePreference.objects.bulk_create(
+            [
+                WorkspaceHomePreference(
+                    key=key,
+                    user=request.user,
+                    workspace=workspace,
+                    sort_order=DEFAULT_WIDGET_SORT_ORDER.get(key, 900),
                 )
-                sort_order_counter += 1
+                for key in keys
+                if key not in existing
+            ],
+            batch_size=10,
+            ignore_conflicts=True,
+        )
 
         preference = WorkspaceHomePreference.objects.filter(user=request.user, workspace_id=workspace.id)
 

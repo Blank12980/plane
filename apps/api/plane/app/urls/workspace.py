@@ -3,8 +3,11 @@
 # See the LICENSE file for details.
 
 from django.urls import path
+from plane.app.views.workspace.current_tasks import CurrentTasksEndpoint, CurrentTasksSeenEndpoint
 from plane.app.views.workspace.client_access import (
+    ClientCandidatesEndpoint,
     ClientListEndpoint,
+    ClientProjectLinkEndpoint,
     ClientAccessEndpoint,
     ClientResourcesEndpoint,
     ClientResourceAssetEndpoint,
@@ -53,6 +56,15 @@ urlpatterns = [
         name="client-resource-file",
     ),
     path("workspaces/<str:slug>/clients/", ClientListEndpoint.as_view(), name="client-list"),
+    path("workspaces/<str:slug>/clients/candidates/", ClientCandidatesEndpoint.as_view(), name="client-candidates"),
+    path(
+        "workspaces/<str:slug>/clients/project-links/", ClientProjectLinkEndpoint.as_view(), name="client-project-links"
+    ),
+    path(
+        "workspaces/<str:slug>/clients/project-links/<uuid:client_id>/",
+        ClientProjectLinkEndpoint.as_view(),
+        name="client-project-link-detail",
+    ),
     path(
         "workspaces/<str:slug>/clients/<uuid:client_id>/access/", ClientAccessEndpoint.as_view(), name="client-access"
     ),
@@ -273,6 +285,8 @@ urlpatterns = [
         WorkspaceHomePreferenceViewSet.as_view(),
         name="workspace-home-preference",
     ),
+    path("workspaces/<str:slug>/current-tasks/", CurrentTasksEndpoint.as_view(), name="current-tasks"),
+    path("workspaces/<str:slug>/current-tasks/seen/", CurrentTasksSeenEndpoint.as_view(), name="current-tasks-seen"),
     path(
         "workspaces/<str:slug>/recent-visits/",
         UserRecentVisitViewSet.as_view({"get": "list"}),

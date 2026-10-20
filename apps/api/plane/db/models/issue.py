@@ -341,6 +341,8 @@ class IssueAssignee(ProjectBaseModel):
         on_delete=models.CASCADE,
         related_name="issue_assignee",
     )
+    # When the assignee opened the work item for the first time. Empty means "new task" for the assignee.
+    seen_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ["issue", "assignee", "deleted_at"]

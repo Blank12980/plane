@@ -35,3 +35,24 @@ class ClientAccessGrant(ProjectBaseModel):
                 name="client_grant_unique_page",
             ),
         ]
+
+
+class ProjectClient(ProjectBaseModel):
+    """A client that was added to a project.
+
+    Being in a project gives a client no access by itself: they still see only the work items and pages an
+    administrator opens for them (``ClientAccessGrant``). The link decides in which project's "Clients" settings the
+    client is listed, so that every project administrator manages their own clients.
+    """
+
+    client = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="project_client_links")
+
+    class Meta:
+        db_table = "project_clients"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["client", "project"],
+                condition=models.Q(deleted_at__isnull=True),
+                name="project_client_unique_client_project",
+            )
+        ]

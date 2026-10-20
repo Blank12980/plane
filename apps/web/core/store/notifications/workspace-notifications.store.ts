@@ -21,6 +21,7 @@ import type {
 // helpers
 import { convertToEpoch } from "@plane/utils";
 // services
+import { currentTasksService } from "@/services/current-tasks.service";
 import workspaceNotificationService from "@/services/workspace-notification.service";
 // store
 import type { INotification } from "@/store/notifications/notification";
@@ -426,12 +427,16 @@ export class WorkspaceNotificationStore implements IWorkspaceNotificationStore {
       snoozed: false,
       archived: false,
     });
+    // "Mark as read" also acknowledges the tasks that were assigned and not opened yet
+    await currentTasksService.markSeen(workspaceSlug);
     runInAction(() => {
       const readAt = new Date().toUTCString();
       set(this, "unreadNotificationsCount", {
         total_unread_notifications_count: 0,
         mention_unread_notifications_count: 0,
         recent_notifications: [],
+        new_tasks: [],
+        new_tasks_count: 0,
       });
       Object.values(this.notifications).forEach((notification) => {
         if (!notification.read_at && !notification.archived_at) notification.mutateNotification({ read_at: readAt });

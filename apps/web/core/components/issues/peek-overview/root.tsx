@@ -19,6 +19,7 @@ import { useIssueDetail } from "@/hooks/store/use-issue-detail";
 import { useIssues } from "@/hooks/store/use-issues";
 import { useUserPermissions } from "@/hooks/store/user";
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
+import { useMarkIssueSeen } from "@/hooks/use-mark-issue-seen";
 import { useWorkItemProperties } from "@/plane-web/hooks/use-issue-properties";
 // local imports
 import type { TIssueOperations } from "../issue-detail";
@@ -50,6 +51,7 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
   const storeType = issueStoreFromProps ?? issueStoreType;
   const { issues } = useIssues(storeType);
 
+  useMarkIssueSeen(peekIssue?.workspaceSlug, peekIssue?.issueId);
   useWorkItemProperties(
     peekIssue?.projectId,
     peekIssue?.workspaceSlug,

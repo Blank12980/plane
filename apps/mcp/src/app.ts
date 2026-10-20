@@ -3,6 +3,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 
 import { GizmoApiClient, type FetchLike } from "./api-client";
 import type { McpConfig } from "./env";
+import { bearerChallenge, isOAuthToken, TokenVerifier } from "./oauth";
 import { createMcpServer, SERVER_NAME, SERVER_VERSION } from "./server";
 
 export interface AppOptions {
@@ -44,6 +45,7 @@ export function createApp({ config, fetch }: AppOptions): express.Express {
 
   const router = express.Router();
   router.use(originGuard(config.allowedOrigins));
+  const verifier = new TokenVerifier(config, fetch);
 
   router.get("/health", (_req, res) => {
     res.json({ status: "OK", name: SERVER_NAME, version: SERVER_VERSION });
@@ -52,9 +54,37 @@ export function createApp({ config, fetch }: AppOptions): express.Express {
   const handleMcpRequest = async (req: Request, res: Response) => {
     const token = extractToken(req);
     if (!token || token.length > MAX_TOKEN_LENGTH) {
-      res.setHeader("WWW-Authenticate", 'Bearer realm="gizmo-mcp"');
-      jsonRpcError(res, 401, -32001, "Missing Gizmo API token: send Authorization: Bearer <token> or X-Api-Key.");
+      // The challenge also tells OAuth capable clients (ChatGPT, ...) where to find the authorization server.
+      res.setHeader("WWW-Authenticate", bearerChallenge(req, config));
+      jsonRpcError(
+        res,
+        401,
+        -32001,
+        "Missing Gizmo credentials: send Authorization: Bearer <API token or OAuth access token> or X-Api-Key."
+      );
       return;
+    }
+    // OAuth access tokens are short lived. A client only refreshes one after an HTTP 401 from this endpoint, so the
+    // token is checked here instead of surfacing as a tool error. The same call tells which workspace it belongs to.
+    let tokenWorkspace: string | undefined;
+    if (isOAuthToken(token)) {
+      const result = await verifier.verify(token);
+      if (!result.ok) {
+        if (result.reason === "invalid") {
+          res.setHeader(
+            "WWW-Authenticate",
+            bearerChallenge(req, config, { code: "invalid_token", description: result.message })
+          );
+          jsonRpcError(res, 401, -32001, result.message);
+        } else {
+          jsonRpcError(res, 503, -32603, result.message);
+        }
+        return;
+      }
+      // ChatGPT cannot send an X-Workspace-Slug header: a token bound to one workspace (or a user who has only one)
+      // does not need to name it.
+      tokenWorkspace =
+        result.info.workspace ?? (result.info.workspaces.length === 1 ? result.info.workspaces[0] : undefined);
     }
     const workspaceHeader = req.headers["x-workspace-slug"];
     const api = new GizmoApiClient({
@@ -67,7 +97,7 @@ export function createApp({ config, fetch }: AppOptions): express.Express {
     const server = createMcpServer({
       api,
       config,
-      headerWorkspaceSlug: typeof workspaceHeader === "string" ? workspaceHeader : undefined,
+      headerWorkspaceSlug: typeof workspaceHeader === "string" ? workspaceHeader : tokenWorkspace,
     });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on("close", () => {

@@ -57,7 +57,7 @@ from .intake import (
 
 from .asset import UserAssetEndpoint, UserServerAssetEndpoint, GenericAssetEndpoint
 
-from .user import UserEndpoint
+from .user import UserEndpoint, UserTokenEndpoint, UserWorkspacesEndpoint
 
 from .invite import WorkspaceInvitationsViewset
 

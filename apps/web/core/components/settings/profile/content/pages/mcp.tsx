@@ -11,19 +11,24 @@ import useSWR from "swr";
 import { Button } from "@plane/propel/button";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import { McpService } from "@plane/services";
-import type { TMcpToken, TMcpTokenCreated } from "@plane/types";
+import type { TMcpOAuthConnection, TMcpToken, TMcpTokenCreated } from "@plane/types";
 import {
   MCP_SAFETY_RULES,
   MCP_SCOPES,
   MCP_SCOPE_PRESETS,
   MCP_TOOL_GROUPS,
+  buildMcpAgentPrompt,
   buildMcpClientConfigs,
+  buildMcpOAuthConfigs,
   cn,
 } from "@plane/utils";
+import type { TMcpClientConfig } from "@plane/utils";
 // components
 import { ProfileSettingsHeading } from "@/components/settings/profile/heading";
 
 const mcpService = new McpService();
+
+const ALL_WORKSPACES = "*";
 
 const formatDate = (value: string | null) => (value ? new Date(value).toLocaleDateString("ru-RU") : "—");
 
@@ -37,19 +42,39 @@ const errorText = (error: unknown): string => {
   return "Попробуйте ещё раз.";
 };
 
-function CodeBlock({ code }: { code: string }) {
+const tokenTarget = (token: Pick<TMcpToken, "workspace">) => token.workspace?.name ?? "все пространства";
+
+/** A secret is never shown in full on screen; copying still copies the real value. */
+const maskToken = (text: string, token?: string) => (token ? text.split(token).join("plane_api_••••••••") : text);
+
+function CodeBlock({
+  code,
+  copyValue,
+  label = "Копировать",
+  testId,
+}: {
+  code: string;
+  copyValue?: string;
+  label?: string;
+  testId?: string;
+}) {
   return (
     <div className="relative">
-      <pre className="overflow-x-auto rounded-md bg-layer-1 p-3 text-12 text-primary">{code}</pre>
+      <pre
+        data-testid={testId}
+        className="max-h-96 overflow-auto rounded-md bg-layer-1 p-3 pr-28 text-12 whitespace-pre-wrap text-primary"
+      >
+        {code}
+      </pre>
       <button
         type="button"
         className="absolute top-2 right-2 rounded bg-surface-1 px-2 py-1 text-12 text-secondary hover:text-primary"
         onClick={() => {
-          void navigator.clipboard.writeText(code);
+          void navigator.clipboard.writeText(copyValue ?? code);
           setToast({ type: TOAST_TYPE.SUCCESS, title: "Скопировано" });
         }}
       >
-        Копировать
+        {label}
       </button>
     </div>
   );
@@ -68,6 +93,10 @@ function ClientConfigs({
     () => buildMcpClientConfigs({ endpoint, token, workspaceSlug }),
     [endpoint, token, workspaceSlug]
   );
+  return <ConfigTabs configs={configs} token={token} />;
+}
+
+function ConfigTabs({ configs, token }: { configs: TMcpClientConfig[]; token?: string }) {
   const [activeId, setActiveId] = useState(configs[0].id);
   const active = configs.find((config) => config.id === activeId) ?? configs[0];
   return (
@@ -88,23 +117,27 @@ function ClientConfigs({
         ))}
       </div>
       <p className="text-13 text-secondary">{active.hint}</p>
-      <CodeBlock code={active.snippet} />
+      <CodeBlock code={maskToken(active.snippet, token)} copyValue={active.snippet} />
     </div>
   );
 }
 
 function CreateTokenForm(props: {
   workspaces: { slug: string; name: string }[];
+  allowAllWorkspaces: boolean;
   allowedScopes: string[];
   maxDays: number;
   rateLimit: string;
   onCreated: (token: TMcpTokenCreated) => void;
 }) {
-  const { workspaces, allowedScopes, maxDays, rateLimit, onCreated } = props;
+  const { workspaces, allowAllWorkspaces, allowedScopes, maxDays, rateLimit, onCreated } = props;
   // a preset is offered only when the administrator allows every scope it contains
   const presets = MCP_SCOPE_PRESETS.filter((preset) => preset.scopes.every((scope) => allowedScopes.includes(scope)));
   const [label, setLabel] = useState("Мой агент");
-  const [workspaceSlug, setWorkspaceSlug] = useState(workspaces[0]?.slug ?? "");
+  // "all workspaces" is the default when it is allowed and the user has more than one workspace
+  const [target, setTarget] = useState(
+    allowAllWorkspaces && workspaces.length > 1 ? ALL_WORKSPACES : (workspaces[0]?.slug ?? "")
+  );
   const [scopes, setScopes] = useState<string[]>(
     (presets.find((preset) => preset.id === "assistant") ?? presets[0])?.scopes ?? ["read"]
   );
@@ -133,7 +166,7 @@ function CreateTokenForm(props: {
       onCreated(
         await mcpService.userCreateToken({
           label: label.trim() || "MCP",
-          workspace_slug: workspaceSlug,
+          ...(target === ALL_WORKSPACES ? { all_workspaces: true } : { workspace_slug: target }),
           scopes,
           expires_in_days: days,
         })
@@ -161,17 +194,22 @@ function CreateTokenForm(props: {
         <label className="space-y-1 text-13">
           <span className="block font-medium text-primary">Пространство</span>
           <select
-            value={workspaceSlug}
-            onChange={(event) => setWorkspaceSlug(event.target.value)}
+            value={target}
+            onChange={(event) => setTarget(event.target.value)}
             className="w-full rounded border border-subtle bg-surface-1 p-2"
           >
+            {allowAllWorkspaces && <option value={ALL_WORKSPACES}>Все мои пространства ({workspaces.length})</option>}
             {workspaces.map((workspace) => (
               <option key={workspace.slug} value={workspace.slug}>
                 {workspace.name}
               </option>
             ))}
           </select>
-          <span className="block text-12 text-tertiary">Токен работает только в этом пространстве.</span>
+          <span className="block text-12 text-tertiary">
+            {target === ALL_WORKSPACES
+              ? "Один токен работает во всех пространствах, где вы состоите, в том числе в тех, куда вас добавят позже."
+              : "Токен работает только в этом пространстве."}
+          </span>
         </label>
       </div>
 
@@ -238,7 +276,7 @@ function CreateTokenForm(props: {
       <Button
         type="submit"
         variant="primary"
-        disabled={isSubmitting || !workspaceSlug || scopes.length === 0}
+        disabled={isSubmitting || !target || scopes.length === 0}
         loading={isSubmitting}
       >
         Создать токен
@@ -256,8 +294,8 @@ function TokenRow({ token, onDelete }: { token: TMcpToken; onDelete: () => void 
           {token.label} <span className="font-normal ml-1 text-12 text-tertiary">{status}</span>
         </div>
         <div className="text-12 text-secondary">
-          {token.workspace?.name ?? "любое пространство"} · создан {formatDate(token.created_at)} · использован{" "}
-          {formatDate(token.last_used)} · до {token.expired_at ? formatDate(token.expired_at) : "без срока"}
+          {tokenTarget(token)} · создан {formatDate(token.created_at)} · использован {formatDate(token.last_used)} · до{" "}
+          {token.expired_at ? formatDate(token.expired_at) : "без срока"}
         </div>
         <div className="flex flex-wrap gap-1">
           {token.scopes.map((scope) => (
@@ -274,9 +312,112 @@ function TokenRow({ token, onDelete }: { token: TMcpToken; onDelete: () => void 
   );
 }
 
+function OAuthSection({
+  endpoint,
+  connections,
+  hasWorkspaces,
+  onDisconnect,
+}: {
+  endpoint: string;
+  connections: TMcpOAuthConnection[];
+  hasWorkspaces: boolean;
+  onDisconnect: (connection: TMcpOAuthConnection) => void;
+}) {
+  const configs = useMemo(() => buildMcpOAuthConfigs(endpoint), [endpoint]);
+  return (
+    <section className="space-y-3" aria-label="Вход через OAuth">
+      <h3 className="text-14 font-medium text-primary">Способ 1. Вход через OAuth, без токена</h3>
+      <p className="text-13 text-secondary">
+        Подходит приложениям, которые сами открывают окно входа: ChatGPT, Claude, Cursor, VS Code. Укажите в приложении
+        адрес сервера и выберите авторизацию OAuth: приложение попросит вас войти в Gizmo, а вы выберете права и
+        пространства. Токен создавать и вставлять не нужно.
+      </p>
+      {!hasWorkspaces && (
+        <p role="status" className="text-13 text-tertiary">
+          У вас нет пространств, в которых можно подключить приложение.
+        </p>
+      )}
+      <div className="space-y-1">
+        <span className="text-13 font-medium text-primary">Адрес MCP-сервера</span>
+        <CodeBlock code={endpoint} label="Скопировать адрес" />
+      </div>
+      <ConfigTabs configs={configs} />
+      <div className="space-y-1">
+        <h4 className="text-13 font-medium text-primary">Подключённые приложения</h4>
+        {connections.length > 0 ? (
+          connections.map((connection) => (
+            <div
+              key={connection.id}
+              className="flex flex-wrap items-start justify-between gap-3 border-b border-subtle py-3 text-13"
+            >
+              <div className="min-w-0 space-y-1">
+                <div className="font-medium text-primary">{connection.client_name}</div>
+                <div className="text-12 text-secondary">
+                  {connection.workspace?.name ?? "все пространства"} · подключено {formatDate(connection.created_at)} ·
+                  использовано {formatDate(connection.last_used_at)} · действует до {formatDate(connection.expires_at)}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {connection.scopes.map((scope) => (
+                    <code key={scope} className="rounded bg-layer-1 px-1 text-11">
+                      {scope}
+                    </code>
+                  ))}
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => onDisconnect(connection)}>
+                Отключить
+              </Button>
+            </div>
+          ))
+        ) : (
+          <p className="text-13 text-tertiary">Пока ни одно приложение не подключено через OAuth.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export const McpProfileSettings = observer(function McpProfileSettings() {
   const { data, error, isLoading, mutate } = useSWR("USER_MCP_OVERVIEW", () => mcpService.userOverview());
   const [created, setCreated] = useState<TMcpTokenCreated | null>(null);
+  // undefined: the newest working token is used automatically, null: the user chose "without a token"
+  const [chosenTokenId, setChosenTokenId] = useState<string | null | undefined>(undefined);
+
+  // the token that was just created is usable right away, before the list is reloaded
+  const knownTokens = data?.tokens ?? [];
+  const tokens =
+    created && !knownTokens.some((token) => token.id === created.id) ? [created, ...knownTokens] : knownTokens;
+  const workingTokens = tokens.filter((token) => token.is_active);
+  const selectedId = chosenTokenId === undefined ? (created?.id ?? workingTokens[0]?.id ?? null) : chosenTokenId;
+  const selectedToken = workingTokens.find((token) => token.id === selectedId) ?? null;
+
+  // the secret of the selected token is substituted into the prompt and the configurations automatically
+  const { data: fetchedSecret } = useSWR(
+    selectedToken && created?.id !== selectedToken.id ? ["USER_MCP_TOKEN_SECRET", selectedToken.id] : null,
+    () => mcpService.userRevealToken(selectedToken!.id),
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+  const secret = selectedToken ? (created?.id === selectedToken.id ? created.token : fetchedSecret) : undefined;
+
+  const workspaceSlugs = (data?.workspaces ?? []).map((workspace) => workspace.slug);
+  const tokenWorkspaceSlug = selectedToken?.workspace?.slug;
+  const defaultSlug = tokenWorkspaceSlug ?? workspaceSlugs[0];
+  const coversAllWorkspaces = !!selectedToken && !selectedToken.workspace;
+
+  const prompt = useMemo(
+    () =>
+      data
+        ? buildMcpAgentPrompt({
+            endpoint: data.endpoint,
+            token: secret,
+            workspaceSlug: defaultSlug,
+            allWorkspaceSlugs: coversAllWorkspaces ? workspaceSlugs : undefined,
+            oauth: data.oauth.enabled,
+          })
+        : "",
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data?.endpoint, data?.oauth.enabled, secret, defaultSlug, coversAllWorkspaces, workspaceSlugs.join(",")]
+  );
 
   if (isLoading) return <p className="text-13 text-tertiary">Загрузка…</p>;
   if (error || !data) {
@@ -288,19 +429,32 @@ export const McpProfileSettings = observer(function McpProfileSettings() {
   }
 
   const canCreate = data.enabled && data.allow_user_tokens && data.workspaces.length > 0;
-  const shownWorkspace = created?.workspace?.slug ?? data.workspaces[0]?.slug;
 
   const removeToken = async (token: TMcpToken) => {
     if (!window.confirm(`Удалить токен «${token.label}»? Агент, который его использует, потеряет доступ.`)) return;
     try {
       await mcpService.userDeleteToken(token.id);
       if (created?.id === token.id) setCreated(null);
+      if (chosenTokenId === token.id) setChosenTokenId(undefined);
       await mutate();
       setToast({ type: TOAST_TYPE.SUCCESS, title: "Токен удалён" });
     } catch (deleteError) {
       setToast({ type: TOAST_TYPE.ERROR, title: "Не удалось удалить", message: errorText(deleteError) });
     }
   };
+
+  const disconnect = async (connection: TMcpOAuthConnection) => {
+    if (!window.confirm(`Отключить «${connection.client_name}»? Приложение потеряет доступ к Gizmo.`)) return;
+    try {
+      await mcpService.userDeleteConnection(connection.id);
+      await mutate();
+      setToast({ type: TOAST_TYPE.SUCCESS, title: "Приложение отключено" });
+    } catch (disconnectError) {
+      setToast({ type: TOAST_TYPE.ERROR, title: "Не удалось отключить", message: errorText(disconnectError) });
+    }
+  };
+
+  const oauthEnabled = data.oauth.enabled;
 
   return (
     <div className="size-full space-y-8">
@@ -326,45 +480,108 @@ export const McpProfileSettings = observer(function McpProfileSettings() {
         </div>
       )}
 
-      {/* 1. token */}
+      {/* OAuth: applications such as ChatGPT log the user in themselves */}
+      {oauthEnabled && (
+        <OAuthSection
+          endpoint={data.endpoint}
+          connections={data.oauth.connections}
+          hasWorkspaces={data.workspaces.length > 0}
+          onDisconnect={(connection) => void disconnect(connection)}
+        />
+      )}
+      {data.enabled && !data.policy.allow_oauth && (
+        <p className="text-12 text-tertiary">
+          Вход через OAuth (ChatGPT и другие приложения) отключён администратором: используйте токен.
+        </p>
+      )}
+
+      {/* token */}
       <section className="space-y-3">
-        <h3 className="text-14 font-medium text-primary">1. Создайте токен</h3>
+        <h3 className="text-14 font-medium text-primary">{oauthEnabled ? "Способ 2. Токен" : "1. Токен"}</h3>
         {canCreate && !created && (
           <CreateTokenForm
             workspaces={data.workspaces}
+            allowAllWorkspaces={data.policy.allow_all_workspaces}
             allowedScopes={data.policy.allowed_scopes}
             maxDays={data.policy.max_token_days}
             rateLimit={data.policy.default_rate_limit}
             onCreated={(token) => {
               setCreated(token);
+              setChosenTokenId(undefined);
               void mutate();
             }}
           />
         )}
         {created && (
           <div className="space-y-3 rounded-lg border border-success-strong/40 bg-success-subtle p-4 text-13">
-            <p className="font-medium text-primary">Токен «{created.label}» создан. Скопируйте его сейчас.</p>
-            <p className="text-secondary">Токен показывается один раз. Позже его нельзя будет посмотреть.</p>
-            <CodeBlock code={created.token} />
+            <p className="font-medium text-primary">
+              Токен «{created.label}» создан ({tokenTarget(created)}). Он уже подставлен в промпт и настройки ниже.
+            </p>
+            <p className="text-secondary">Позже токен можно снова скопировать здесь же: он виден только вам.</p>
+            <CodeBlock code={maskToken(created.token, created.token)} copyValue={created.token} />
             <Button variant="secondary" size="sm" onClick={() => setCreated(null)}>
-              Я сохранил токен
+              Создать ещё один
             </Button>
           </div>
         )}
+        {!canCreate && !created && workingTokens.length === 0 && (
+          <p className="text-13 text-tertiary">Пока нет рабочих токенов.</p>
+        )}
       </section>
 
-      {/* 2. connect */}
+      {/* 2. prompt for an agent */}
       <section className="space-y-3">
-        <h3 className="text-14 font-medium text-primary">2. Вставьте настройку в клиент</h3>
+        <h3 className="text-14 font-medium text-primary">Попросите агента подключиться самому</h3>
         <p className="text-13 text-secondary">
-          {created
-            ? "Настройки уже содержат ваш новый токен и пространство. Выберите свой клиент."
-            : "Так выглядит подключение. После создания токена здесь появятся готовые настройки с вашим токеном."}
+          Скопируйте промпт и вставьте его агенту (Claude Code, Cursor, Codex и др.): он сам определит свой клиент,
+          добавит MCP-сервер Gizmo и проверит подключение. Вручную ничего править не нужно.
+          {oauthEnabled &&
+            " В промпте два способа: вход через OAuth (токен не нужен) и токен; агент выберет тот, что поддерживает его клиент."}
         </p>
-        <ClientConfigs endpoint={data.endpoint} token={created?.token} workspaceSlug={shownWorkspace} />
+        <label className="flex flex-wrap items-center gap-2 text-13">
+          <span className="font-medium text-primary">Токен в промпте</span>
+          <select
+            aria-label="Токен в промпте"
+            value={selectedId ?? ""}
+            onChange={(event) => setChosenTokenId(event.target.value || null)}
+            className="rounded border border-subtle bg-surface-1 p-2"
+          >
+            {workingTokens.map((token) => (
+              <option key={token.id} value={token.id}>
+                {token.label} · {tokenTarget(token)}
+              </option>
+            ))}
+            <option value="">
+              {oauthEnabled
+                ? "Без токена (вход через OAuth или агент попросит токен)"
+                : "Без токена (агент попросит его у вас)"}
+            </option>
+          </select>
+        </label>
+        {selectedToken && !secret && <p className="text-12 text-tertiary">Подставляем токен…</p>}
+        <CodeBlock
+          code={maskToken(prompt, secret)}
+          copyValue={prompt}
+          label="Скопировать промпт"
+          testId="agent-prompt"
+        />
+        {!selectedToken && (
+          <p className="text-12 text-tertiary">
+            Токена пока нет. Создайте его выше, и он подставится в промпт автоматически.
+          </p>
+        )}
       </section>
 
-      {/* 3. tokens */}
+      {/* 3. manual */}
+      <section className="space-y-3">
+        <h3 className="text-14 font-medium text-primary">Или добавьте вручную (по токену)</h3>
+        <p className="text-13 text-secondary">
+          Настройки для разных клиентов. Токен и пространство подставлены автоматически, если токен выбран выше.
+        </p>
+        <ClientConfigs endpoint={data.endpoint} token={secret} workspaceSlug={defaultSlug} />
+      </section>
+
+      {/* tokens */}
       <section className="space-y-2">
         <h3 className="text-14 font-medium text-primary">Мои MCP-токены</h3>
         {data.tokens.length > 0 ? (
@@ -416,9 +633,19 @@ export const McpProfileSettings = observer(function McpProfileSettings() {
           <p className="font-medium text-primary">Если не работает</p>
           <ul className="list-disc space-y-1 pl-5">
             <li>401: токен неверный, истёк или отозван. Создайте новый.</li>
+            {oauthEnabled && (
+              <li>
+                Приложение, подключённое через OAuth, перестало отвечать: отключите его выше и подключите заново (доступ
+                обновляется автоматически, пока приложением пользуются).
+              </li>
+            )}
             <li>403: у токена нет нужного права или у вас нет доступа к проекту.</li>
             <li>429: превышен лимит запросов, подождите минуту.</li>
             <li>Ответ «MCP отключён»: администратор выключил MCP на экземпляре.</li>
+            <li>
+              «No workspace given»: токен для всех пространств, а пространство не указано. Агент вызывает
+              list_workspaces.
+            </li>
           </ul>
         </div>
       </section>

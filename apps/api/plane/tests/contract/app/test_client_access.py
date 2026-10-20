@@ -393,3 +393,18 @@ def test_plain_members_guests_and_clients_cannot_open_client_settings(workspace,
         assert browser.get(clients_url(workspace), {"project_id": str(project.id)}).status_code == 403
         assert browser.get(clients_url(workspace)).status_code == 403
     assert user_client(client).get(clients_url(workspace), {"project_id": str(project.id)}).status_code == 403
+
+
+@pytest.mark.parametrize("kind", ["issue", "page"])
+@pytest.mark.parametrize("project_param", ["", "all"])
+def test_access_dialog_loads_without_a_project_filter(session_client, workspace, client_scope, kind, project_param):
+    """The dialog sends an empty project (all projects) by default: it must list the materials, not fail."""
+    client, _, project, issues, pages, _ = client_scope
+    params = {"type": kind, "search": "", "page": 1}
+    if project_param == "":
+        params["project_id"] = ""
+    response = session_client.get(grant_url(workspace, client), params)
+    assert response.status_code == 200, response.content
+    body = response.json()
+    assert len(body["resources"]) == 2
+    assert [item["id"] for item in body["projects"]] == [str(project.id)]

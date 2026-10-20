@@ -6,6 +6,8 @@
 
 from django.conf import settings
 from django.urls import include, path, re_path
+
+from plane.authentication.oauth_urls import well_known_urlpatterns as oauth_well_known_urlpatterns
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -19,7 +21,9 @@ urlpatterns = [
     path("api/public/", include("plane.space.urls")),
     path("api/instances/", include("plane.license.urls")),
     path("api/v1/", include("plane.api.urls")),
+    path("auth/oauth/", include("plane.authentication.oauth_urls")),
     path("auth/", include("plane.authentication.urls")),
+    *oauth_well_known_urlpatterns,
     path("", include("plane.web.urls")),
 ]
 

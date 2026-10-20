@@ -33,7 +33,25 @@ export type ClientSummary = {
   issue_count: number;
   page_count: number;
 };
+export type ClientCandidate = {
+  id: string;
+  display_name: string;
+  email: string;
+  avatar_url: string | null;
+  /** Workspace role: 3 = client, 5 = guest, 15 = member. */
+  role: number;
+};
+export type ClientCandidatesResponse = {
+  project: { id: string; name: string; identifier: string };
+  /** Clients of the workspace that are not in the project yet. */
+  clients: ClientCandidate[];
+  /** Members who could be made clients (workspace administrators only). */
+  members: ClientCandidate[];
+  can_promote: boolean;
+};
 export type ClientListResponse = {
+  /** Workspace administrators can also turn a member into a client. */
+  can_promote: boolean;
   /** Set when the list is scoped to one project (project settings), null for the whole workspace. */
   project: { id: string; name: string; identifier: string } | null;
   clients: ClientSummary[];
@@ -56,12 +74,37 @@ export class ClientAccessService extends APIService {
     ).data;
   }
 
+  async candidates(slug: string, projectId: string, search: string): Promise<ClientCandidatesResponse> {
+    return (
+      await this.get(`/api/workspaces/${slug}/clients/candidates/`, {
+        params: { project_id: projectId, search: search || undefined },
+      })
+    ).data;
+  }
+
+  async addToProject(
+    slug: string,
+    projectId: string,
+    payload: { client_ids: string[]; promote_member_ids: string[] }
+  ): Promise<{ linked: number; promoted: number }> {
+    return (await this.post(`/api/workspaces/${slug}/clients/project-links/`, { project_id: projectId, ...payload }))
+      .data;
+  }
+
+  async removeFromProject(slug: string, projectId: string, clientId: string): Promise<void> {
+    await this.delete(`/api/workspaces/${slug}/clients/project-links/${clientId}/`, {
+      params: { project_id: projectId },
+    });
+  }
+
   async getAccess(
     slug: string,
     clientId: string,
     params: { type: "issue" | "page"; search: string; project_id: string; page: number }
   ): Promise<ClientAccessResponse> {
-    return (await this.get(`/api/workspaces/${slug}/clients/${clientId}/access/`, { params })).data;
+    // an empty project means "all projects": the parameter is left out instead of being sent empty
+    const query = { ...params, project_id: params.project_id || undefined };
+    return (await this.get(`/api/workspaces/${slug}/clients/${clientId}/access/`, { params: query })).data;
   }
 
   async grant(slug: string, clientId: string, resource: ClientResource): Promise<ClientGrant> {

@@ -258,7 +258,8 @@ class ProjectAccessMixin:
                 raise PermissionDenied("Clients receive individual resources through the client portal.")
             return
         slug = self.kwargs.get("slug")
-        project_id = self.kwargs.get("project_id") or request.query_params.get("project_id")
+        # An empty ?project_id= means "no project filter", not an invalid project id.
+        project_id = self.kwargs.get("project_id") or request.query_params.get("project_id") or None
         match = getattr(request, "resolver_match", None)
         if project_id is None and match and match.url_name == "project":
             project_id = self.kwargs.get("pk")

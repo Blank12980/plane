@@ -22,6 +22,7 @@ import { useIssueDetail } from "@/hooks/store/use-issue-detail";
 import { useIssues } from "@/hooks/store/use-issues";
 import { useUserPermissions } from "@/hooks/store/user";
 import { useAppRouter } from "@/hooks/use-app-router";
+import { useMarkIssueSeen } from "@/hooks/use-mark-issue-seen";
 // local components
 import { IssuePeekOverview } from "../peek-overview";
 import { IssueMainContent } from "./main-content";
@@ -81,6 +82,8 @@ export const IssueDetailRoot = observer(function IssueDetailRoot(props: TIssueDe
   } = useIssues(EIssuesStoreType.ARCHIVED);
   const { allowPermissions } = useUserPermissions();
   const { issueDetailSidebarCollapsed } = useAppTheme();
+  // opening a task that is assigned to the user marks it as seen
+  useMarkIssueSeen(workspaceSlug, issueId);
 
   const issueOperations: TIssueOperations = useMemo(
     () => ({

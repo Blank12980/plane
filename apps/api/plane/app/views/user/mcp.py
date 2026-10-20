@@ -7,15 +7,19 @@ import os
 
 # Django imports
 from django.conf import settings
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 # Third party imports
 from rest_framework import status
+from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.response import Response
 
 # Module imports
 from plane.app.views.base import BaseAPIView
 from plane.db.models import APIToken, Workspace, WorkspaceMember
+from plane.utils import oauth
 from plane.utils.mcp import UserMcpTokenSerializer, get_mcp_policy, token_payload
 
 MAX_USER_MCP_TOKENS = 20
@@ -47,12 +51,22 @@ class UserMcpEndpoint(BaseAPIView):
                 "allow_user_tokens": policy["allow_user_tokens"],
                 "endpoint": public_endpoint(),
                 "policy": {
+                    "allow_all_workspaces": policy["allow_all_workspaces"],
+                    "allow_oauth": policy["allow_oauth"],
                     "allowed_scopes": policy["allowed_scopes"],
                     "max_token_days": policy["max_token_days"],
                     "default_rate_limit": policy["default_rate_limit"],
                 },
                 "workspaces": [{"slug": w.slug, "name": w.name} for w in connectable_workspaces(request.user)],
                 "tokens": [token_payload(token) for token in own_mcp_tokens(request.user)],
+                "oauth": {
+                    "enabled": oauth.oauth_enabled(policy),
+                    "endpoints": oauth.endpoints(request),
+                    "connections": [
+                        oauth.connection_payload(connection)
+                        for connection in oauth.active_connections().filter(user=request.user)
+                    ],
+                },
             },
             status=status.HTTP_200_OK,
         )
@@ -74,11 +88,20 @@ class UserMcpTokenEndpoint(BaseAPIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        workspace = connectable_workspaces(request.user).filter(slug=data["workspace_slug"]).first()
-        if workspace is None:
-            return Response(
-                {"workspace_slug": ["You are not a member of this workspace."]}, status=status.HTTP_400_BAD_REQUEST
-            )
+        if data["all_workspaces"]:
+            # unbound token: it works in every workspace the user belongs to, now and later
+            workspace = None
+            if not connectable_workspaces(request.user).exists():
+                return Response(
+                    {"all_workspaces": ["You do not belong to any workspace."]}, status=status.HTTP_400_BAD_REQUEST
+                )
+        else:
+            workspace = connectable_workspaces(request.user).filter(slug=data["workspace_slug"]).first()
+            if workspace is None:
+                return Response(
+                    {"workspace_slug": ["You are not a member of this workspace."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         if own_mcp_tokens(request.user).count() >= MAX_USER_MCP_TOKENS:
             return Response(
                 {"error": f"You can have at most {MAX_USER_MCP_TOKENS} MCP tokens. Delete the ones you do not use."},
@@ -99,6 +122,25 @@ class UserMcpTokenEndpoint(BaseAPIView):
         )
         # The secret is shown exactly once, right now.
         return Response({**token_payload(token), "token": token.token}, status=status.HTTP_201_CREATED)
+
+    def get(self, request, pk=None):
+        """The owner can copy their own working token again (for example to paste it into an agent prompt).
+
+        Only through the signed-in session, never with an API key, and only for tokens that still work.
+        """
+        if pk is None:
+            raise MethodNotAllowed("GET")
+        now = timezone.now()
+        token = get_object_or_404(
+            APIToken.objects.filter(Q(expired_at__isnull=True) | Q(expired_at__gt=now)),
+            pk=pk,
+            user=request.user,
+            source="mcp",
+            is_active=True,
+        )
+        response = Response({"token": token.token}, status=status.HTTP_200_OK)
+        response["Cache-Control"] = "no-store"
+        return response
 
     def delete(self, request, pk):
         token = get_object_or_404(APIToken, pk=pk, user=request.user, source="mcp")

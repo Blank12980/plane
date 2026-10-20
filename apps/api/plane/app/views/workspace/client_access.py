@@ -13,8 +13,17 @@ from rest_framework.exceptions import PermissionDenied
 
 from plane.app.permissions import ROLE, WorkspaceUserPermission, allow_permission
 from plane.app.views.base import BaseAPIView
-from plane.db.models import ClientAccessGrant, FileAsset, Issue, IssueComment, Page, ProjectPage, WorkspaceMember
-from plane.utils.client_access import client_grants
+from plane.db.models import (
+    ClientAccessGrant,
+    FileAsset,
+    Issue,
+    IssueComment,
+    Page,
+    ProjectClient,
+    ProjectPage,
+    WorkspaceMember,
+)
+from plane.utils.client_access import client_grants, make_workspace_client
 from plane.utils.project_access import has_project_role, is_workspace_admin, projects_for_user
 from plane.settings.storage import S3Storage
 
@@ -65,6 +74,13 @@ def optional_project_id(value):
     return serializers.UUIDField().run_validation(value) if value else None
 
 
+def project_client_ids(project):
+    """Clients that belong to a project: added to it explicitly or already holding shared items inside it."""
+    added = ProjectClient.objects.filter(project=project).values("client_id")
+    sharing = active_grants().filter(project=project).values("client_id")
+    return set(added.values_list("client_id", flat=True)) | set(sharing.values_list("client_id", flat=True))
+
+
 class ClientListEndpoint(BaseAPIView):
     """Clients of the workspace with a summary of what they can see (optionally inside one project)."""
 
@@ -81,6 +97,9 @@ class ClientListEndpoint(BaseAPIView):
         members = WorkspaceMember.objects.filter(
             workspace__slug=slug, role=3, is_active=True, is_instance_admin_access=False, member__is_bot=False
         ).select_related("member")
+        if project:
+            # In a project only the clients that belong to it are listed.
+            members = members.filter(member_id__in=project_client_ids(project))
         grants = active_grants().filter(workspace__slug=slug)
         if project:
             grants = grants.filter(project=project)
@@ -93,6 +112,8 @@ class ClientListEndpoint(BaseAPIView):
                 "project": {"id": str(project.id), "name": project.name, "identifier": project.identifier}
                 if project
                 else None,
+                # Making a workspace member a client changes their workspace role: administrators only.
+                "can_promote": is_workspace_admin(request.user, slug),
                 "clients": [
                     {
                         "id": str(member.member_id),
@@ -195,6 +216,13 @@ class ClientAccessEndpoint(BaseAPIView):
         )
         if created:
             ClientAccessGrant.objects.filter(pk=grant.pk).update(created_by_id=request.user.id)
+        # sharing something with a client makes them a client of that project
+        ProjectClient.objects.get_or_create(
+            client_id=client_id,
+            project=project,
+            workspace=membership.workspace,
+            defaults={"created_by": request.user},
+        )
         return Response(grant_data(grant), status=status.HTTP_201_CREATED)
 
     def delete(self, request, slug, client_id, grant_id):
@@ -202,6 +230,133 @@ class ClientAccessEndpoint(BaseAPIView):
         require_client_management(request.user, slug, grant.project_id)
         self.target_client(slug, client_id)
         grant.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ClientCandidatesEndpoint(BaseAPIView):
+    """Who can be added to a project as a client."""
+
+    permission_classes = [WorkspaceUserPermission]
+
+    def get(self, request, slug):
+        project_id = serializers.UUIDField().run_validation(request.query_params.get("project_id"))
+        require_client_management(request.user, slug, project_id)
+        project = get_object_or_404(
+            projects_for_user(request.user, slug).filter(archived_at__isnull=True), id=project_id
+        )
+        query = request.query_params.get("search", "").strip()[:100]
+
+        def people(role_filter, exclude=None):
+            members = WorkspaceMember.objects.filter(
+                workspace__slug=slug,
+                is_active=True,
+                is_instance_admin_access=False,
+                member__is_bot=False,
+                member__is_active=True,
+                **role_filter,
+            ).select_related("member")
+            if exclude is not None:
+                members = members.exclude(member_id__in=exclude)
+            if query:
+                members = members.filter(Q(member__display_name__icontains=query) | Q(member__email__icontains=query))
+            return members.order_by("member__display_name", "member__email")[:50]
+
+        def payload(member):
+            return {
+                "id": str(member.member_id),
+                "display_name": member.member.display_name,
+                "email": member.member.email,
+                "avatar_url": member.member.avatar_url,
+                "role": member.role,
+            }
+
+        already_added = project_client_ids(project)
+        can_promote = is_workspace_admin(request.user, slug)
+        return Response(
+            {
+                "project": {"id": str(project.id), "name": project.name, "identifier": project.identifier},
+                # clients of the workspace that are not in this project yet
+                "clients": [payload(member) for member in people({"role": 3}, exclude=already_added)],
+                # members who could become clients (administrators of the workspace only)
+                "members": (
+                    [payload(member) for member in people({"role__in": [5, 15]}, exclude=[request.user.id])]
+                    if can_promote
+                    else []
+                ),
+                "can_promote": can_promote,
+            }
+        )
+
+
+class ClientProjectLinkEndpoint(BaseAPIView):
+    """Add clients to a project and remove them from it."""
+
+    permission_classes = [WorkspaceUserPermission]
+
+    @transaction.atomic
+    def post(self, request, slug):
+        try:
+            project_id = serializers.UUIDField().run_validation(request.data.get("project_id"))
+        except serializers.ValidationError:
+            require_client_management(request.user, slug)
+            raise
+        require_client_management(request.user, slug, project_id)
+        project = get_object_or_404(
+            projects_for_user(request.user, slug).filter(archived_at__isnull=True), id=project_id
+        )
+        id_list = serializers.ListField(child=serializers.UUIDField(), max_length=100, required=False)
+        client_ids = set(id_list.run_validation(request.data.get("client_ids", [])))
+        promote_ids = set(id_list.run_validation(request.data.get("promote_member_ids", [])))
+        if not client_ids and not promote_ids:
+            return Response({"error": "Choose at least one client."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if promote_ids:
+            if not is_workspace_admin(request.user, slug):
+                raise PermissionDenied("Only workspace administrators can make a member a client.")
+            members = list(
+                WorkspaceMember.objects.select_for_update().filter(
+                    workspace__slug=slug,
+                    member_id__in=promote_ids,
+                    role__in=[5, 15],
+                    is_active=True,
+                    is_instance_admin_access=False,
+                    member__is_bot=False,
+                )
+            )
+            if len(members) != len(promote_ids) or request.user.id in promote_ids:
+                return Response(
+                    {"error": "Only active guests and members can become clients."}, status=status.HTTP_400_BAD_REQUEST
+                )
+            for member in members:
+                make_workspace_client(member)
+            client_ids |= promote_ids
+
+        clients = WorkspaceMember.objects.filter(
+            workspace__slug=slug, member_id__in=client_ids, role=3, is_active=True, is_instance_admin_access=False
+        )
+        if clients.count() != len(client_ids):
+            return Response(
+                {"error": "Some of the users are not clients of this workspace."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        linked = 0
+        for membership in clients:
+            _, created = ProjectClient.objects.get_or_create(
+                client_id=membership.member_id,
+                project=project,
+                workspace=membership.workspace,
+                defaults={"created_by": request.user},
+            )
+            linked += int(created)
+        return Response({"linked": linked, "promoted": len(promote_ids)}, status=status.HTTP_201_CREATED)
+
+    def delete(self, request, slug, client_id):
+        project_id = serializers.UUIDField().run_validation(request.query_params.get("project_id"))
+        require_client_management(request.user, slug, project_id)
+        get_object_or_404(projects_for_user(request.user, slug), id=project_id)
+        with transaction.atomic():
+            # leaving the project closes what was shared inside it; other projects are untouched
+            ClientAccessGrant.objects.filter(workspace__slug=slug, project_id=project_id, client_id=client_id).delete()
+            ProjectClient.objects.filter(workspace__slug=slug, project_id=project_id, client_id=client_id).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

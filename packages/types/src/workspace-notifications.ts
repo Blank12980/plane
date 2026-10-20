@@ -5,6 +5,7 @@
  */
 
 import type { ENotificationFilterType } from "./enums";
+import type { TCurrentTask } from "./home";
 import type { IUserLite } from "./users";
 
 // filters
@@ -97,6 +98,9 @@ export type TNotificationPaginatedInfo = {
 // notification count
 export type TUnreadNotificationsCount = {
   recent_notifications?: TNotification[];
+  /** Tasks assigned to the user (by somebody else) that the user has not opened yet. */
+  new_tasks?: TCurrentTask[];
+  new_tasks_count?: number;
   total_unread_notifications_count: number;
   mention_unread_notifications_count: number;
 };

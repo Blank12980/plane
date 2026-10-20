@@ -18,7 +18,7 @@ export function resolveWorkspace(ctx: ToolContext, explicit?: string): string {
   const slug = explicit?.trim() || ctx.headerWorkspaceSlug?.trim() || ctx.config.defaultWorkspaceSlug;
   if (!slug) {
     throw new ToolInputError(
-      "No workspace given. Pass workspace_slug, send the X-Workspace-Slug header or set DEFAULT_WORKSPACE_SLUG."
+      "No workspace given. Pass workspace_slug, send the X-Workspace-Slug header or set DEFAULT_WORKSPACE_SLUG. Call list_workspaces to see which workspaces this token can use."
     );
   }
   if (!/^[a-z0-9_-]+$/i.test(slug)) throw new ToolInputError(`Invalid workspace slug: ${slug}`);

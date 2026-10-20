@@ -45,6 +45,20 @@ export const contextTools = [
     },
   }),
   defineTool({
+    name: "list_workspaces",
+    title: "List workspaces",
+    description:
+      "Lists the workspaces this token can work in (a token for all workspaces returns every workspace of the user). Use the slug as workspace_slug in the other tools.",
+    scope: "read",
+    input: {},
+    annotations: READ_ONLY,
+    run: async (_args, ctx) =>
+      listOf(await ctx.api.get("/users/me/workspaces/")).map((workspace) => ({
+        slug: workspace.slug,
+        name: workspace.name,
+      })),
+  }),
+  defineTool({
     name: "list_projects",
     title: "List projects",
     description: "Lists projects of the workspace that the token's user can see.",

@@ -6,8 +6,16 @@
 from rest_framework import status
 from rest_framework.response import Response
 
-from django.db.models import Q
-from plane.db.models import UserRecentVisit, Issue, ProjectPage
+from django.db.models import Exists, OuterRef, Q
+from plane.db.models import (
+    Issue,
+    IssueAssignee,
+    IssueComment,
+    IssueSubscriber,
+    ProjectMember,
+    ProjectPage,
+    UserRecentVisit,
+)
 from plane.app.serializers import WorkspaceRecentVisitSerializer
 
 # Modules imports
@@ -27,17 +35,37 @@ class UserRecentVisitViewSet(BaseViewSet):
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
     def list(self, request, slug):
-        allowed_ids = projects_for_user(request.user, slug).values("pk")
-        user_recent_visits = UserRecentVisit.objects.filter(workspace__slug=slug, user=request.user).filter(
-            Q(entity_name__iexact="project", entity_identifier__in=allowed_ids)
-            | Q(
-                entity_name__iexact="issue",
-                entity_identifier__in=Issue.objects.filter(project_id__in=allowed_ids).values("pk"),
+        user = request.user
+        allowed_ids = projects_for_user(user, slug).values("pk")
+        # "Recent" shows only what the user takes part in, not everything they happened to open:
+        # projects they are a member of, work items they created, are assigned to, follow or commented on,
+        # and pages they own or created.
+        member_project_ids = ProjectMember.objects.filter(
+            workspace__slug=slug, member=user, is_active=True, is_instance_admin_access=False
+        ).values("project_id")
+        participating_issue_ids = (
+            Issue.objects.filter(project_id__in=allowed_ids)
+            .filter(
+                Q(created_by=user)
+                | Exists(IssueAssignee.objects.filter(issue_id=OuterRef("pk"), assignee=user))
+                | Exists(IssueSubscriber.objects.filter(issue_id=OuterRef("pk"), subscriber=user))
+                | Exists(IssueComment.objects.filter(issue_id=OuterRef("pk"), actor=user))
             )
-            | Q(
-                entity_name__iexact="page",
-                entity_identifier__in=ProjectPage.objects.filter(project_id__in=allowed_ids).values("page_id"),
+            .values("pk")
+        )
+        participating_page_ids = (
+            ProjectPage.objects.filter(project_id__in=allowed_ids)
+            .filter(Q(page__owned_by=user) | Q(page__created_by=user))
+            .values("page_id")
+        )
+        user_recent_visits = (
+            UserRecentVisit.objects.filter(workspace__slug=slug, user=user)
+            .filter(
+                Q(entity_name__iexact="project", entity_identifier__in=member_project_ids)
+                | Q(entity_name__iexact="issue", entity_identifier__in=participating_issue_ids)
+                | Q(entity_name__iexact="page", entity_identifier__in=participating_page_ids)
             )
+            .order_by("-visited_at")
         )
 
         entity_name = request.query_params.get("entity_name")

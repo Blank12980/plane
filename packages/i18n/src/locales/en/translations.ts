@@ -3178,5 +3178,6 @@ export default {
     clients: "Clients",
     time_budget: "Hours limit",
     mcp: "MCP for agents",
+    current_tasks: "Current tasks",
   },
 } as const;

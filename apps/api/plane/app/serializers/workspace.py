@@ -294,11 +294,53 @@ class WorkspaceRecentVisitSerializer(BaseSerializer):
         return None
 
 
+CURRENT_TASKS_SORT_FIELDS = ("readiness", "priority", "due_date", "updated_at", "project")
+
+
 class WorkspaceHomePreferenceSerializer(BaseSerializer):
     class Meta:
         model = WorkspaceHomePreference
-        fields = ["key", "is_enabled", "sort_order"]
+        fields = ["key", "is_enabled", "sort_order", "config"]
         read_only_fields = ["workspace", "created_by", "updated_by"]
+
+    def validate_config(self, value):
+        """Widget settings. Only the "current tasks" widget has any: how the list is sorted and what it shows."""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Config must be an object.")
+        key = self.instance.key if self.instance else None
+        if key != "current_tasks":
+            if value:
+                raise serializers.ValidationError("This widget has no settings.")
+            return value
+
+        unknown = set(value) - {"sort", "show_completed", "limit"}
+        if unknown:
+            raise serializers.ValidationError(f"Unknown settings: {', '.join(sorted(unknown))}.")
+        cleaned = {}
+        if "sort" in value:
+            rules = value["sort"]
+            if not isinstance(rules, list) or len(rules) > len(CURRENT_TASKS_SORT_FIELDS):
+                raise serializers.ValidationError({"sort": "Sort must be a short list of rules."})
+            seen_fields = set()
+            cleaned_rules = []
+            for rule in rules:
+                field = rule.get("field") if isinstance(rule, dict) else None
+                direction = rule.get("direction") if isinstance(rule, dict) else None
+                if field not in CURRENT_TASKS_SORT_FIELDS or direction not in ("asc", "desc") or field in seen_fields:
+                    raise serializers.ValidationError({"sort": "Each rule needs a unique field and a direction."})
+                seen_fields.add(field)
+                cleaned_rules.append({"field": field, "direction": direction})
+            cleaned["sort"] = cleaned_rules
+        if "show_completed" in value:
+            if not isinstance(value["show_completed"], bool):
+                raise serializers.ValidationError({"show_completed": "Must be true or false."})
+            cleaned["show_completed"] = value["show_completed"]
+        if "limit" in value:
+            limit = value["limit"]
+            if isinstance(limit, bool) or not isinstance(limit, int) or not 3 <= limit <= 100:
+                raise serializers.ValidationError({"limit": "Must be a number between 3 and 100."})
+            cleaned["limit"] = limit
+        return cleaned
 
 
 class StickySerializer(BaseSerializer):

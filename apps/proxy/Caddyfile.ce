@@ -46,6 +46,14 @@
         flush_interval -1
         import retry_upstream
     }
+    # OAuth discovery for MCP clients such as ChatGPT (RFC 9728 and RFC 8414). The documents are served by the API,
+    # the authorization endpoints themselves live under /auth/oauth/ and the consent screen under /oauth/ (web).
+    reverse_proxy /.well-known/oauth-protected-resource* api:8000 {
+        import retry_upstream
+    }
+    reverse_proxy /.well-known/oauth-authorization-server* api:8000 {
+        import retry_upstream
+    }
     reverse_proxy /api/* api:8000 {
         import retry_upstream
     }

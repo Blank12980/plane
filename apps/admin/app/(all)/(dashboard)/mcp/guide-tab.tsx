@@ -9,16 +9,32 @@ import useSWR from "swr";
 // gizmo imports
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import { McpService } from "@plane/services";
-import { MCP_SAFETY_RULES, MCP_SCOPES, MCP_TOOL_GROUPS, buildMcpClientConfigs, cn } from "@plane/utils";
+import {
+  MCP_SAFETY_RULES,
+  MCP_SCOPES,
+  MCP_TOOL_GROUPS,
+  buildMcpClientConfigs,
+  buildMcpOAuthConfigs,
+  cn,
+  mcpOAuthMetadataUrl,
+} from "@plane/utils";
 
 const mcpService = new McpService();
 
 export function McpGuideTab() {
   const { data } = useSWR("MCP_OVERVIEW", () => mcpService.adminOverview());
   const endpoint = data?.endpoint ?? `${window.location.origin}/mcp`;
-  const configs = buildMcpClientConfigs({ endpoint, workspaceSlug: "<slug-пространства>" });
+  const tokenConfigs = buildMcpClientConfigs({ endpoint, workspaceSlug: "<slug-пространства>" });
+  const oauthConfigs = buildMcpOAuthConfigs(endpoint);
+  const oauthEnabled = data ? data.settings.enabled && data.settings.allow_oauth : true;
+  const [mode, setMode] = useState<"oauth" | "token">("oauth");
+  const configs = oauthEnabled && mode === "oauth" ? oauthConfigs : tokenConfigs;
   const [activeClient, setActiveClient] = useState(configs[0].id);
   const active = configs.find((config) => config.id === activeClient) ?? configs[0];
+  const switchMode = (next: "oauth" | "token") => {
+    setMode(next);
+    setActiveClient((next === "oauth" ? oauthConfigs : tokenConfigs)[0].id);
+  };
 
   return (
     <div className="space-y-8 text-13 text-secondary">
@@ -36,15 +52,65 @@ export function McpGuideTab() {
             пользователям создавать токены или выдавайте их сами.
           </li>
           <li>
-            Пользователь открывает «Настройки профиля → MCP для агентов», создаёт токен, копирует готовую настройку для
-            своего клиента (Cursor, Claude, VS Code) и вставляет её.
+            Пользователь открывает «Настройки профиля → MCP для агентов». Либо создаёт токен и копирует готовую
+            настройку или промпт для агента (Cursor, Claude, VS Code), либо подключает приложение через OAuth (ChatGPT,
+            Claude): указывает адрес сервера, входит в Gizmo и выбирает права.
           </li>
           <li>Следите за использованием на вкладках «Токены» и «Журнал вызовов»; отзывайте лишние токены.</li>
         </ol>
       </section>
 
+      <section className="space-y-2">
+        <h3 className="text-14 font-medium text-primary">Подключение через OAuth (ChatGPT и др.)</h3>
+        <p>
+          {oauthEnabled
+            ? "OAuth включён."
+            : "OAuth выключен (на вкладке «Обзор и политика» или вместе с MCP): приложения смогут подключаться только по токену."}{" "}
+          Приложение получает адрес сервера <code>{endpoint}</code>, само находит настройки авторизации (
+          <code>{mcpOAuthMetadataUrl(endpoint)}</code>), регистрируется и отправляет пользователя на экран согласия
+          Gizmo. Там пользователь выбирает права (в пределах разрешённых вам) и пространства. Приложение получает
+          короткоживущий доступ и обновляет его само, пока им пользуются.
+        </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            Права, срок (refresh-токен живёт «максимальный срок токена» или 365 дней без ограничения) и лимит запросов
+            берутся из правил на вкладке «Обзор и политика».
+          </li>
+          <li>
+            Подключения видны на вкладке «Токены»: администратор может отключить любое. Выключение OAuth или MCP
+            останавливает их мгновенно.
+          </li>
+          <li>
+            Для работы нужен публичный HTTPS-адрес (<code>APP_BASE_URL</code>) и маршрут{" "}
+            <code>/.well-known/oauth-*</code> к API: он входит в стандартный Caddyfile.
+          </li>
+        </ul>
+      </section>
+
       <section className="space-y-3">
         <h3 className="text-14 font-medium text-primary">Пример подключения клиента</h3>
+        {oauthEnabled && (
+          <div className="flex gap-2 text-13">
+            {(
+              [
+                ["oauth", "Через OAuth, без токена"],
+                ["token", "По токену"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => switchMode(key)}
+                className={cn("rounded border px-3 py-1", {
+                  "border-accent-strong text-primary": mode === key,
+                  "border-subtle text-tertiary hover:text-secondary": mode !== key,
+                })}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap gap-1 border-b border-subtle">
           {configs.map((config) => (
             <button
@@ -75,8 +141,9 @@ export function McpGuideTab() {
           </button>
         </div>
         <p className="text-12 text-tertiary">
-          Вместо &lt;ВАШ_ТОКЕН&gt; подставляется токен пользователя. В настройках профиля пользователь получает те же
-          настройки уже с готовым токеном и пространством.
+          {oauthEnabled && mode === "oauth"
+            ? "Токен не нужен: клиент откроет страницу входа в Gizmo. В настройках профиля те же инструкции и список подключённых приложений."
+            : "Вместо <ВАШ_ТОКЕН> подставляется токен пользователя. В настройках профиля токен подставляется в настройки и в промпт для агента автоматически."}
         </p>
       </section>
 
@@ -93,7 +160,7 @@ export function McpGuideTab() {
         </ul>
         <p>
           Права только сужают доступ: токен никогда не может больше, чем позволяет роль владельца. Токен привязан к
-          одному пространству и не работает в других.
+          одному пространству или (если вы это разрешили) работает во всех пространствах пользователя.
         </p>
       </section>
 
