@@ -24,7 +24,7 @@ import type { CustomImageNodeViewProps } from "./node-view";
 type CustomImageUploaderProps = CustomImageNodeViewProps & {
   failedToLoadImage: boolean;
   hasDuplicationFailed: boolean;
-  loadImageFromFileSystem: (file: string) => void;
+  loadImageFromFileSystem: (file: string | undefined) => void;
   maxFileSize: number;
   setIsUploaded: (isUploaded: boolean) => void;
 };
@@ -113,6 +113,23 @@ export function CustomImageUploader(props: CustomImageUploaderProps) {
     alert(message);
   }, []);
 
+  // the image never reached the storage. Without this the local preview keeps the node looking uploaded, the
+  // description is saved with an image that has no source and the user only finds out when they open it again
+  const onUploadError = useCallback(
+    (error: unknown) => {
+      // forget the pending file, otherwise the placeholder would start the same failing upload again when it mounts
+      imageComponentImageFileMap?.delete(imageEntityId ?? "");
+      loadImageFromFileSystem(undefined);
+      updateAttributes({ status: ECustomImageStatus.PENDING });
+      alert(
+        error instanceof Error && error.message
+          ? error.message
+          : "Не удалось загрузить изображение. Проверьте соединение и попробуйте ещё раз."
+      );
+    },
+    [imageComponentImageFileMap, imageEntityId, loadImageFromFileSystem, updateAttributes]
+  );
+
   // hooks
   const { isUploading: isImageBeingUploaded, uploadFile } = useUploader({
     acceptedMimeTypes: ACCEPTED_IMAGE_MIME_TYPES,
@@ -122,6 +139,7 @@ export function CustomImageUploader(props: CustomImageUploaderProps) {
     maxFileSize,
     onInvalidFile: handleInvalidFile,
     onUpload,
+    onUploadError,
   });
 
   const { draggedInside, onDrop, onDragEnter, onDragLeave } = useDropZone({

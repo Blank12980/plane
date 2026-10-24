@@ -829,7 +829,10 @@ class DuplicateAssetEndpoint(BaseAPIView):
                 return Response({"error": "Project not found"}, status=status.HTTP_404_NOT_FOUND)
 
         storage = S3Storage(request=request)
-        original_asset = FileAsset.objects.filter(id=asset_id, is_uploaded=True).first()
+        # The editor soft-deletes an image as soon as it leaves a description, even while another place still
+        # references it (the original of a pasted copy, an older description version). The file itself is intact,
+        # so it must stay copyable: look among the soft-deleted assets too, but only inside this workspace.
+        original_asset = FileAsset.all_objects.filter(id=asset_id, workspace=workspace, is_uploaded=True).first()
 
         if not original_asset:
             return Response({"error": "Asset not found"}, status=status.HTTP_404_NOT_FOUND)

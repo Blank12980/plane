@@ -103,7 +103,7 @@ export const InboxIssueDescription = observer(function InboxIssueDescription(pro
           return asset_id;
         } catch (error) {
           console.log("Error in uploading work item asset:", error);
-          throw new Error("Asset upload failed. Please try again later.");
+          throw new Error("Не удалось загрузить вложение. Попробуйте позже.");
         }
       }}
       duplicateFile={async (assetId: string) => {
@@ -117,7 +117,7 @@ export const InboxIssueDescription = observer(function InboxIssueDescription(pro
           onAssetUpload?.(asset_id);
           return asset_id;
         } catch {
-          throw new Error("Asset duplication failed. Please try again later.");
+          throw new Error("Не удалось продублировать вложение. Попробуйте позже.");
         }
       }}
     />

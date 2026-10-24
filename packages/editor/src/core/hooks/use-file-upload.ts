@@ -23,6 +23,8 @@ type TUploaderArgs = {
   maxFileSize: number;
   onInvalidFile: (error: EFileError, file: File, message: string) => void;
   onUpload: (url: string, file: File) => void;
+  /** called when the file could not be stored, so the caller can tell the user instead of failing silently */
+  onUploadError?: (error: unknown, file: File) => void;
 };
 
 export const useUploader = (args: TUploaderArgs) => {
@@ -34,6 +36,7 @@ export const useUploader = (args: TUploaderArgs) => {
     maxFileSize,
     onInvalidFile,
     onUpload,
+    onUploadError,
   } = args;
   // states
   const [isUploading, setIsUploading] = useState(false);
@@ -53,10 +56,15 @@ export const useUploader = (args: TUploaderArgs) => {
         setIsUploading(false);
         return;
       }
+      // set once the file is known not to be stored, so a late preview can't bring back a dead upload
+      let hasFailed = false;
+      // set once the file is stored, a failure after that point is not an upload failure
+      let isStored = false;
       try {
         if (loadFileFromFileSystem) {
           const reader = new FileReader();
           reader.onload = () => {
+            if (hasFailed) return;
             if (reader.result) {
               loadFileFromFileSystem(reader.result as string);
             } else {
@@ -73,9 +81,14 @@ export const useUploader = (args: TUploaderArgs) => {
         if (!url) {
           throw new Error("Something went wrong while uploading the file.");
         }
+        isStored = true;
         onUpload(url, file);
-      } catch {
-        console.error("useFileUpload: Error in uploading file");
+      } catch (error) {
+        console.error("useFileUpload: Error in uploading file", error);
+        if (!isStored) {
+          hasFailed = true;
+          onUploadError?.(error, file);
+        }
       } finally {
         handleProgressStatus?.(false);
         setIsUploading(false);
@@ -89,6 +102,7 @@ export const useUploader = (args: TUploaderArgs) => {
       maxFileSize,
       onInvalidFile,
       onUpload,
+      onUploadError,
     ]
   );
 
